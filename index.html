@@ -291,6 +291,7 @@ body::before {
 .level-label { color: var(--level-accent); }
 
 .level-color-6 { --level-accent: #a0b87e; }
+.level-color-7 { --level-accent: #8eb8b8; }
 
 .level-color-1 .example-btn:hover { border-color: #7eb8a0; }
 .level-color-2 .example-btn:hover { border-color: #b8a07e; }
@@ -298,6 +299,7 @@ body::before {
 .level-color-4 .example-btn:hover { border-color: #b87ea0; }
 .level-color-5 .example-btn:hover { border-color: #c47e6a; }
 .level-color-6 .example-btn:hover { border-color: #a0b87e; }
+.level-color-7 .example-btn:hover { border-color: #8eb8b8; }
 
 /* ─── Syntax hint ─── */
 .syntax-hint {
@@ -1076,7 +1078,8 @@ body::before {
         <code>norm</code> <code>identity</code> <code>raise</code> <code>lower</code>
         <code>sym</code> <code>antisym</code> <code>eigenvalues</code> <code>contract</code>.
         GR: <code>christoffel(g, dg)</code> <code>riemann(g, dg, ddg)</code>.
-        Where: <code>v + w where let v = v(1,2); let w = v(3,4)</code>.
+        Indexed: <code>T[a+, b-]</code>, <code>contract(T[a+, b-], v[b+])</code>.
+        Basis: <code>components(T, e)</code>. Where: <code>v + w where let v = v(1,2); let w = v(3,4)</code>.
       </div>
     </div>
 
@@ -3203,8 +3206,7 @@ var builtinFunctions = {
   identity: fnIdentity,
   eigenvalues: fnEigenvalues,
   sym: fnSym,
-  antisym: fnAntisym,
-  contract: fnSelfContract
+  antisym: fnAntisym
 };
 
 var twoArgFunctions = {
@@ -3216,6 +3218,8 @@ var twoArgFunctions = {
 var threeArgFunctions = {
   riemann: fnRiemann
 };
+
+var varArgFunctions = { contract: true, components: true };
 
 // ─── Lexer ───
 function lex(input) {
@@ -3243,6 +3247,8 @@ function lex(input) {
       else if (word === 'over') { tokens.push({ type: 'over', value: word, pos: start }); }
       else if (word === 'dim') { tokens.push({ type: 'dim', value: word, pos: start }); }
       else if (word === 'metric') { tokens.push({ type: 'metric', value: word, pos: start }); }
+      else if (word === 'basis') { tokens.push({ type: 'basis', value: word, pos: start }); }
+      else if (word === 'for') { tokens.push({ type: 'for', value: word, pos: start }); }
       else { tokens.push({ type: 'identifier', value: word, pos: start }); }
       continue;
     }
@@ -3256,6 +3262,8 @@ function lex(input) {
     else if (ch === ';') tokens.push({ type: 'semicolon', value: ch, pos: i });
     else if (ch === '=') tokens.push({ type: 'equals', value: ch, pos: i });
     else if (ch === '|') tokens.push({ type: 'pipe', value: ch, pos: i });
+    else if (ch === '[') tokens.push({ type: 'lbracket', value: ch, pos: i });
+    else if (ch === ']') tokens.push({ type: 'rbracket', value: ch, pos: i });
     else throw ParseError("Unexpected character '" + ch + "'", i);
     i++;
   }
@@ -3348,17 +3356,22 @@ Parser.prototype.parseUnary = function() {
 
 Parser.prototype.parsePrimary = function() {
   var t = this.current();
+  var node;
   if (t.type === 'number') {
     this.advance();
-    return { type: 'TensorLiteral', raw: t.value, tensor: scalar(Number(t.value)), pos: t.pos };
+    node = { type: 'TensorLiteral', raw: t.value, tensor: scalar(Number(t.value)), pos: t.pos };
+    return this.parsePostfix(node);
   }
   if (t.type === 'identifier') {
     var name = t.value;
     // Check if it's a function call
     if (this.tokens[this.index + 1] && this.tokens[this.index + 1].type === 'lparen') {
-      // Is it a known constructor or function?
       if (/^(v|cv|m|t3)$/i.test(name)) {
-        return this.parseTensorConstructor();
+        node = this.parseTensorConstructor();
+        return this.parsePostfix(node);
+      }
+      if (varArgFunctions[name]) {
+        return this.parseFunctionCallVarArg();
       }
       if (threeArgFunctions[name]) {
         return this.parseFunctionCall3();
@@ -3370,15 +3383,16 @@ Parser.prototype.parsePrimary = function() {
         return this.parseFunctionCall2();
       }
     }
-    // Variable reference
+    // Variable reference (may be followed by [a+, b-] indexed notation)
     this.advance();
-    return { type: 'VarRef', name: name, pos: t.pos };
+    node = { type: 'VarRef', name: name, pos: t.pos };
+    return this.parsePostfix(node);
   }
   if (t.type === 'lparen') {
     this.advance();
     var expr = this.parseAdditive();
     this.expect('rparen', "Missing closing parenthesis.");
-    return expr;
+    return this.parsePostfix(expr);
   }
   throw ParseError("Unexpected token '" + t.value + "'", t.pos);
 };
@@ -3414,6 +3428,39 @@ Parser.prototype.parseFunctionCall3 = function() {
   var arg3 = this.parseAdditive();
   this.expect('rparen', "Expected ')' to close " + name + "(...).");
   return { type: 'FuncCall', name: name, args: [arg1, arg2, arg3], pos: nameToken.pos };
+};
+
+Parser.prototype.parsePostfix = function(node) {
+  while (this.current().type === 'lbracket') {
+    var bracketPos = this.advance().pos; // consume '['
+    var slots = [];
+    while (this.current().type !== 'rbracket') {
+      var labelToken = this.expect('identifier', "Expected index label in [...].");
+      var label = labelToken.value;
+      var variance;
+      if (this.current().type === 'plus') { variance = '+'; this.advance(); }
+      else if (this.current().type === 'minus') { variance = '-'; this.advance(); }
+      else { throw ParseError("Expected '+' or '-' after index label '" + label + "'.", this.current().pos); }
+      slots.push({ label: label, variance: variance, space: null });
+      if (this.current().type === 'comma') this.advance();
+    }
+    this.expect('rbracket', "Expected ']' to close index specification.");
+    node = { type: 'IndexedExpr', base: node, slots: slots, pos: bracketPos };
+  }
+  return node;
+};
+
+Parser.prototype.parseFunctionCallVarArg = function() {
+  var nameToken = this.advance();
+  var name = nameToken.value;
+  this.expect('lparen', "Expected '(' after '" + name + "'.");
+  var args = [];
+  while (this.current().type !== 'rparen') {
+    args.push(this.parseAdditive());
+    if (this.current().type === 'comma') this.advance(); else break;
+  }
+  this.expect('rparen', "Expected ')' to close " + name + "(...).");
+  return { type: 'FuncCall', name: name, args: args, pos: nameToken.pos };
 };
 
 Parser.prototype.parseNumberComponent = function(context) {
@@ -3480,6 +3527,10 @@ function astToString(node) {
   if (node.type === 'TensorLiteral') return node.raw;
   if (node.type === 'VarRef') return node.name;
   if (node.type === 'UnaryNeg') return '(-' + astToString(node.operand) + ')';
+  if (node.type === 'IndexedExpr') {
+    var slotStr = node.slots.map(function(s){ return s.label + s.variance; }).join(', ');
+    return astToString(node.base) + '[' + slotStr + ']';
+  }
   if (node.type === 'FuncCall') return node.name + '(' + node.args.map(function(a){ return astToString(a); }).join(', ') + ')';
   if (node.type === 'WhereExpr') {
     var binds = node.bindings.map(function(b){ return 'let ' + b.name + ' = ' + astToString(b.expr); }).join('; ');
@@ -3495,6 +3546,10 @@ function astToTensorExpr(node, env) {
     return node.name;
   }
   if (node.type === 'UnaryNeg') return '-(' + astToTensorExpr(node.operand, env) + ')';
+  if (node.type === 'IndexedExpr') {
+    var slotStr = node.slots.map(function(s){ return s.label + s.variance; }).join(', ');
+    return astToTensorExpr(node.base, env) + '[' + slotStr + ']';
+  }
   if (node.type === 'FuncCall') return node.name + '(' + node.args.map(function(a){ return astToTensorExpr(a, env); }).join(', ') + ')';
   if (node.type === 'WhereExpr') return astToTensorExpr(node.body, env);
   return '(' + astToTensorExpr(node.left, env) + ' ' + node.op + ' ' + astToTensorExpr(node.right, env) + ')';
@@ -3505,6 +3560,166 @@ function explainBinary(op) {
   if (op === '*') return '* is tensor product when both operands are tensors, or scalar scaling when one is rank-0.';
   if (op === '@') return '@ is explicit contraction. Example: cv(1,2) @ v(3,4).';
   return '';
+}
+
+// ─── Index-aware contraction ───
+function indexedContract(a, b, pos, logs) {
+  // Find matching label pairs between a.slots and b.slots
+  var aSlots = a.slots, bSlots = b.slots;
+  var matched = []; // [{aIdx, bIdx, label}]
+  for (var ai = 0; ai < aSlots.length; ai++) {
+    for (var bi = 0; bi < bSlots.length; bi++) {
+      if (aSlots[ai].label === bSlots[bi].label) {
+        if (aSlots[ai].variance === bSlots[bi].variance)
+          throw new TLSError('VarianceError', "Cannot contract index '" + aSlots[ai].label + "': both slots have variance '" + aSlots[ai].variance + "'. Need opposite variance.", pos);
+        var aSpace = aSlots[ai].space.replace(/\*$/, ''), bSpace = bSlots[bi].space.replace(/\*$/, '');
+        if (aSpace !== bSpace && aSpace !== 'V' && bSpace !== 'V')
+          throw new TLSError('SpaceError', "Cannot contract index '" + aSlots[ai].label + "': spaces " + aSlots[ai].space + " and " + bSlots[bi].space + " are incompatible.", pos);
+        matched.push({ aIdx: ai, bIdx: bi, label: aSlots[ai].label });
+      }
+    }
+  }
+  if (matched.length === 0) {
+    throw TypeError_('contract(): no matching index labels found between the two tensors. Shared labels with opposite variance are required.', pos);
+  }
+  // For now, contract one pair at a time (iterate for multiple)
+  var resultTensor = a.tensor, resultSlots = aSlots.slice();
+  var bTensor = b.tensor, bRemainingSlots = bSlots.slice();
+  for (var mi = 0; mi < matched.length; mi++) {
+    var m = matched[mi];
+    // Adjust indices for already-removed slots
+    var aContractIdx = -1, bContractIdx = -1;
+    for (var si = 0; si < resultSlots.length; si++) {
+      if (resultSlots[si].label === m.label) { aContractIdx = si; break; }
+    }
+    for (var si = 0; si < bRemainingSlots.length; si++) {
+      if (bRemainingSlots[si].label === m.label) { bContractIdx = si; break; }
+    }
+    if (aContractIdx === -1 || bContractIdx === -1) continue;
+    // Perform the numeric contraction
+    var contracted = contractAtIndices(resultTensor, bTensor, aContractIdx, bContractIdx, pos);
+    // Update slot lists: remove contracted slots
+    var newSlots = [];
+    for (var si = 0; si < resultSlots.length; si++) { if (si !== aContractIdx) newSlots.push(resultSlots[si]); }
+    for (var si = 0; si < bRemainingSlots.length; si++) { if (si !== bContractIdx) newSlots.push(bRemainingSlots[si]); }
+    resultTensor = contracted;
+    resultSlots = newSlots;
+    bRemainingSlots = [];
+    bTensor = null;
+  }
+  var freeLabels = resultSlots.map(function(s) { return s.label; });
+  var slotStr = resultSlots.map(function(s) { return s.label + s.variance; }).join(', ');
+  logs.push('Index contraction on {' + matched.map(function(m){ return m.label; }).join(', ') + '} \u21d2 free indices: {' + freeLabels.join(', ') + '}.');
+  logs.push('Result \u21d2 ' + tensorTypeString(resultTensor) + ' with value ' + resultTensor.display + '.');
+  if (resultSlots.length === 0) return resultTensor; // scalar result
+  // Wrap result with remaining index info
+  return {
+    kind: 'indexed', tensor: resultTensor, slots: resultSlots,
+    freeIndices: freeLabels, rank: resultTensor.rank,
+    spaces: resultTensor.spaces, variances: resultTensor.variances,
+    value: resultTensor.value,
+    display: resultTensor.display + (slotStr ? '[' + slotStr + ']' : ''),
+    explanation: 'Contracted result with free indices: {' + freeLabels.join(', ') + '}'
+  };
+}
+
+// Contract two tensors at specified axis positions
+function contractAtIndices(a, b, aIdx, bIdx, pos) {
+  // Scalar cases
+  if (a.rank === 0 || b.rank === 0) return contract(a, b, pos);
+  // Determine contraction dimension
+  var aDim, bDim;
+  if (a.kind === 'vector' || a.kind === 'covector') aDim = a.value.length;
+  else if (a.kind === 'tensor2') aDim = aIdx === 0 ? a.value.length : a.value[0].length;
+  else if (a.kind === 'tensor3') {
+    if (aIdx === 0) aDim = a.value.length;
+    else if (aIdx === 1) aDim = a.value[0].length;
+    else aDim = a.value[0][0].length;
+  }
+  if (b.kind === 'vector' || b.kind === 'covector') bDim = b.value.length;
+  else if (b.kind === 'tensor2') bDim = bIdx === 0 ? b.value.length : b.value[0].length;
+  else if (b.kind === 'tensor3') {
+    if (bIdx === 0) bDim = b.value.length;
+    else if (bIdx === 1) bDim = b.value[0].length;
+    else bDim = b.value[0][0].length;
+  }
+  if (aDim !== bDim) throw DimensionError('Index contraction dimension mismatch (' + aDim + ' vs ' + bDim + ').', pos);
+  // Delegate to existing contract() for rank-1/rank-2 combinations
+  // For the common cases, reorder to match existing contract() expectations
+  var totalRank = a.rank + b.rank - 2;
+  if (a.rank === 1 && b.rank === 1) {
+    // vector/covector contraction → scalar
+    return scalar(a.value.reduce(function(sum, x, i) { return sum + x * b.value[i]; }, 0));
+  }
+  if (a.rank === 2 && b.rank === 1) {
+    // tensor2 contracted with vector/covector at aIdx position
+    if (aIdx === 1) {
+      // Standard: contract last slot of matrix with vector → vector
+      var result = a.value.map(function(row) { return row.reduce(function(sum, x, i) { return sum + x * b.value[i]; }, 0); });
+      return a.variances[0] === '+' ? vector(result, a.spaces[0]) : covector(result, a.spaces[0]);
+    } else {
+      // Contract first slot: transpose then contract
+      var n = a.value.length, m = a.value[0].length;
+      var result = [];
+      for (var j = 0; j < m; j++) {
+        var sum = 0;
+        for (var i = 0; i < n; i++) sum += a.value[i][j] * b.value[i];
+        result.push(sum);
+      }
+      return a.variances[1] === '+' ? vector(result, a.spaces[1]) : covector(result, a.spaces[1]);
+    }
+  }
+  if (a.rank === 1 && b.rank === 2) {
+    if (bIdx === 0) {
+      var result = [];
+      var cols = b.value[0].length;
+      for (var j = 0; j < cols; j++) {
+        var sum = 0;
+        for (var i = 0; i < a.value.length; i++) sum += a.value[i] * b.value[i][j];
+        result.push(sum);
+      }
+      return b.variances[1] === '+' ? vector(result, b.spaces[1]) : covector(result, b.spaces[1]);
+    } else {
+      var result = [];
+      for (var i = 0; i < b.value.length; i++) {
+        var sum = 0;
+        for (var j = 0; j < b.value[i].length; j++) sum += a.value[j] * b.value[i][j];
+        result.push(sum);
+      }
+      return b.variances[0] === '+' ? vector(result, b.spaces[0]) : covector(result, b.spaces[0]);
+    }
+  }
+  if (a.rank === 2 && b.rank === 2) {
+    // Matrix-matrix contraction at specified indices
+    return contract(a, b, pos); // Falls through to existing rank2@rank2
+  }
+  throw TypeError_('Index contraction not yet supported for rank-' + a.rank + ' \u00d7 rank-' + b.rank + ' at these positions.', pos);
+}
+
+function indexedSelfContract(indexed, pos, logs) {
+  var slots = indexed.slots, tensor = indexed.tensor;
+  // Find a pair of identical labels with opposite variance
+  for (var i = 0; i < slots.length; i++) {
+    for (var j = i + 1; j < slots.length; j++) {
+      if (slots[i].label === slots[j].label) {
+        if (slots[i].variance === slots[j].variance)
+          throw new TLSError('VarianceError', "Cannot self-contract index '" + slots[i].label + "': both slots have variance '" + slots[i].variance + "'.  Need opposite variance.", pos);
+        // For rank-2: this is trace
+        if (tensor.kind === 'tensor2') {
+          logs.push("Self-contract on index '" + slots[i].label + "' (trace).");
+          var result = fnTrace(tensor, pos);
+          logs.push('Result of self-contraction \u21d2 ' + tensorTypeString(result) + ' with value ' + result.display + '.');
+          return result;
+        }
+        throw TypeError_('Self-contraction on rank-' + tensor.rank + ' tensors is not yet supported for index positions ' + i + ',' + j + '.', pos);
+      }
+    }
+  }
+  // No repeated labels: fall back to positional self-contraction (trace)
+  logs.push("Apply function 'contract' (self-contraction/trace).");
+  var result = fnSelfContract(tensor, pos);
+  logs.push('Result of contract() \u21d2 ' + tensorTypeString(result) + ' with value ' + result.display + '.');
+  return result;
 }
 
 // ─── Evaluate AST ───
@@ -3531,7 +3746,97 @@ function evaluateAST(node, logs, env) {
     return result;
   }
 
+  if (node.type === 'IndexedExpr') {
+    var base = evaluateAST(node.base, logs, env);
+    // Unwrap if already indexed (nested indexing not supported)
+    var tensor = base.kind === 'indexed' ? base.tensor : base;
+    if (node.slots.length !== tensor.rank)
+      throw TypeError_('Index count (' + node.slots.length + ') does not match tensor rank (' + tensor.rank + ').', node.pos);
+    // Validate and fill in slot metadata
+    var slots = [];
+    for (var si = 0; si < node.slots.length; si++) {
+      var s = node.slots[si];
+      if (s.variance !== tensor.variances[si])
+        throw new TLSError('VarianceError', 'Slot ' + si + ' (' + s.label + s.variance + ') has wrong variance; tensor expects \'' + tensor.variances[si] + '\'.', node.pos);
+      slots.push({ label: s.label, variance: s.variance, space: tensor.spaces[si] });
+    }
+    // Check for label duplicates (self-contraction notation)
+    var labelCounts = {};
+    for (var si = 0; si < slots.length; si++) {
+      labelCounts[slots[si].label] = (labelCounts[slots[si].label] || 0) + 1;
+    }
+    for (var lbl in labelCounts) {
+      if (labelCounts[lbl] > 2) throw TypeError_("Index label '" + lbl + "' appears more than twice.", node.pos);
+    }
+    var freeIndices = [];
+    for (var lbl in labelCounts) {
+      if (labelCounts[lbl] === 1) freeIndices.push(lbl);
+    }
+    var slotStr = slots.map(function(s){ return s.label + s.variance; }).join(', ');
+    logs.push('Indexed tensor ' + tensor.display + '[' + slotStr + '] \u2014 free indices: {' + freeIndices.join(', ') + '}.');
+    return {
+      kind: 'indexed', tensor: tensor, slots: slots,
+      freeIndices: freeIndices, rank: tensor.rank,
+      spaces: tensor.spaces, variances: tensor.variances,
+      value: tensor.value,
+      display: tensor.display + '[' + slotStr + ']',
+      explanation: 'Indexed tensor with free indices: {' + freeIndices.join(', ') + '}'
+    };
+  }
+
   if (node.type === 'FuncCall') {
+    // Variable-arity: contract, components
+    if (node.name === 'contract') {
+      if (node.args.length === 1) {
+        var arg = evaluateAST(node.args[0], logs, env);
+        var t = arg.kind === 'indexed' ? arg.tensor : arg;
+        if (arg.kind === 'indexed') {
+          // Self-contraction by repeated label
+          var result = indexedSelfContract(arg, node.pos, logs);
+          return result;
+        }
+        logs.push("Apply function 'contract' to " + t.display + '.');
+        var result = fnSelfContract(t, node.pos);
+        logs.push('Result of contract() \u21d2 ' + tensorTypeString(result) + ' with value ' + result.display + '.');
+        return result;
+      }
+      if (node.args.length === 2) {
+        var a = evaluateAST(node.args[0], logs, env);
+        var b = evaluateAST(node.args[1], logs, env);
+        if (a.kind === 'indexed' && b.kind === 'indexed') {
+          var result = indexedContract(a, b, node.pos, logs);
+          return result;
+        }
+        // Fallback to positional contraction
+        var ta = a.kind === 'indexed' ? a.tensor : a;
+        var tb = b.kind === 'indexed' ? b.tensor : b;
+        logs.push("Apply function 'contract' to " + ta.display + ' and ' + tb.display + '.');
+        var result = contract(ta, tb, node.pos);
+        logs.push('Result of contract() \u21d2 ' + tensorTypeString(result) + ' with value ' + result.display + '.');
+        return result;
+      }
+      throw TypeError_('contract() takes 1 or 2 arguments, got ' + node.args.length + '.', node.pos);
+    }
+    if (node.name === 'components') {
+      if (node.args.length !== 2) throw TypeError_('components() requires 2 arguments: (tensor, basis).', node.pos);
+      var t = evaluateAST(node.args[0], logs, env);
+      var basisArg = node.args[1];
+      if (basisArg.type !== 'VarRef') throw TypeError_('components() second argument must be a basis name.', node.pos);
+      var basisName = basisArg.name;
+      if (!env || !env.bases || !env.bases[basisName])
+        throw new TLSError('StructureError', "Undeclared basis '" + basisName + "'. Use 'basis " + basisName + " for V' in the REPL first.", node.pos);
+      var basis = env.bases[basisName];
+      var tensor = t.kind === 'indexed' ? t.tensor : t;
+      logs.push('Extract components of ' + tensor.display + ' in basis ' + basisName + ' for space ' + basis.space + '.');
+      var result = {
+        kind: tensor.kind, rank: tensor.rank, spaces: tensor.spaces, variances: tensor.variances,
+        value: tensor.value, basis: basisName,
+        display: tensor.display + ' (in basis ' + basisName + ')',
+        explanation: 'Components of tensor relative to basis ' + basisName + '. The component array is a representation, not the tensor itself.'
+      };
+      return result;
+    }
+
     // Three-argument functions (riemann)
     var fn3 = threeArgFunctions[node.name];
     if (fn3) {
@@ -3571,13 +3876,14 @@ function evaluateAST(node, logs, env) {
 
   if (node.type === 'WhereExpr') {
     // Create a local scope
-    var localEnv = { variables: {}, spaces: {}, rings: {}, metrics: {}, tensors: {} };
+    var localEnv = { variables: {}, spaces: {}, rings: {}, metrics: {}, tensors: {}, bases: {} };
     if (env) {
       if (env.variables) { for (var k in env.variables) localEnv.variables[k] = env.variables[k]; }
       if (env.spaces) { for (var k in env.spaces) localEnv.spaces[k] = env.spaces[k]; }
       if (env.rings) { for (var k in env.rings) localEnv.rings[k] = env.rings[k]; }
       if (env.metrics) { for (var k in env.metrics) localEnv.metrics[k] = env.metrics[k]; }
       if (env.tensors) { for (var k in env.tensors) localEnv.tensors[k] = env.tensors[k]; }
+      if (env.bases) { for (var k in env.bases) localEnv.bases[k] = env.bases[k]; }
     }
     logs.push('Entering where-clause scope with ' + node.bindings.length + ' binding(s).');
     for (var i = 0; i < node.bindings.length; i++) {
@@ -3592,12 +3898,52 @@ function evaluateAST(node, logs, env) {
   // BinaryExpr
   var left = evaluateAST(node.left, logs, env);
   var right = evaluateAST(node.right, logs, env);
+  // Unwrap indexed tensors for binary ops, but check index constraints first
+  var leftT = left.kind === 'indexed' ? left.tensor : left;
+  var rightT = right.kind === 'indexed' ? right.tensor : right;
+
+  if (node.op === '+') {
+    // Addition: indexed tensors must have identical free index sets
+    if (left.kind === 'indexed' && right.kind === 'indexed') {
+      var lFree = left.freeIndices.slice().sort().join(',');
+      var rFree = right.freeIndices.slice().sort().join(',');
+      if (lFree !== rFree)
+        throw TypeError_('Cannot add indexed tensors: free index sets differ ({' + left.freeIndices.join(', ') + '} vs {' + right.freeIndices.join(', ') + '}).', node.pos);
+    } else if (left.kind === 'indexed' !== (right.kind === 'indexed')) {
+      if (leftT.rank > 0 || rightT.rank > 0) // Allow scalar+indexed-scalar
+        throw TypeError_('Cannot add indexed and non-indexed tensors.', node.pos);
+    }
+  }
+
+  if (node.op === '*' && left.kind === 'indexed' && right.kind === 'indexed') {
+    // Strict mode: reject implicit contraction (shared labels with opposite variance)
+    var leftLabels = {}, rightLabels = {};
+    left.slots.forEach(function(s) { leftLabels[s.label] = s; });
+    right.slots.forEach(function(s) { rightLabels[s.label] = s; });
+    var shared = [];
+    for (var lbl in leftLabels) {
+      if (rightLabels[lbl]) shared.push(lbl);
+    }
+    if (shared.length > 0) {
+      throw new TLSError('AmbiguityError',
+        'Implicit contraction on index ' + shared.map(function(l){ return "'" + l + "'"; }).join(', ') +
+        " in '*'. TLS requires explicit contraction \u2014 use contract() instead.", node.pos);
+    }
+  }
+
   logs.push("Apply '" + node.op + "' to " + left.display + ' and ' + right.display + '. ' + explainBinary(node.op));
 
   var out;
-  if (node.op === '+') out = addTensors(left, right, node.pos);
-  else if (node.op === '*') out = tensorProduct(left, right, node.pos);
-  else out = contract(left, right, node.pos);
+  if (node.op === '+') out = addTensors(leftT, rightT, node.pos);
+  else if (node.op === '*') out = tensorProduct(leftT, rightT, node.pos);
+  else {
+    // @ operator: use indexed contraction if both sides have index info
+    if (left.kind === 'indexed' && right.kind === 'indexed') {
+      out = indexedContract(left, right, node.pos, logs);
+      return out;
+    }
+    out = contract(leftT, rightT, node.pos);
+  }
 
   var label = node.op === '+' ? 'addition' : node.op === '*' ? 'tensor product' : 'contraction';
   logs.push('Result of ' + label + ' \u21d2 ' + tensorTypeString(out) + ' with value ' + out.display + '.');
@@ -3637,7 +3983,7 @@ function evaluate(input, env) {
 
 // ─── REPL Environment ───
 function createEnv() {
-  return { rings: {}, spaces: {}, variables: {}, metrics: {}, tensors: {} };
+  return { rings: {}, spaces: {}, variables: {}, metrics: {}, tensors: {}, bases: {} };
 }
 
 function cloneEnv(env) {
@@ -3647,6 +3993,7 @@ function cloneEnv(env) {
   for (var k in env.variables) e.variables[k] = env.variables[k];
   for (var k in env.metrics) e.metrics[k] = env.metrics[k];
   for (var k in env.tensors) e.tensors[k] = env.tensors[k];
+  for (var k in env.bases) e.bases[k] = env.bases[k];
   return e;
 }
 
@@ -3755,6 +4102,17 @@ function execReplLine(line, env) {
     env.variables[mName] = mt;
     env.metrics[mName] = mt;
     return { status: 'ok', msg: 'metric ' + mName + ' = ' + mt.display + ' declared' };
+  }
+
+  // basis e for V
+  var basisMatch = line.match(/^basis\s+([A-Za-z_]\w*)\s+for\s+([A-Za-z_]\w*)$/);
+  if (basisMatch) {
+    var bName = basisMatch[1], bSpace = basisMatch[2];
+    if (!env.spaces[bSpace]) {
+      return { status: 'error', msg: "SpaceError: space '" + bSpace + "' not declared." };
+    }
+    env.bases[bName] = { name: bName, space: bSpace, dim: env.spaces[bSpace].dim };
+    return { status: 'ok', msg: 'basis ' + bName + ' for ' + bSpace + ' declared (dim ' + env.spaces[bSpace].dim + ')' };
   }
 
   // let x = expr
@@ -3910,6 +4268,17 @@ var exampleLevels = [
       { label: 'v(1,2) + v(1,2,3)', input: 'v(1,2) + v(1,2,3)', tip: 'TypeError: dimension mismatch \u2014 R\u00b2 \u2260 R\u00b3' },
       { label: 'v(1,2) @ v(3,4)', input: 'v(1,2) @ v(3,4)', tip: 'VarianceError: @ needs covector\u00b7vector, not vector\u00b7vector' },
       { label: 'inv(m(1,2;3,4;5,6))', input: 'inv(m(1,2;3,4;5,6))', tip: 'ShapeError: inverse requires a square matrix' },
+    ]
+  },
+  {
+    title: 'Indexed Notation (TLS)',
+    color: 7,
+    open: false,
+    items: [
+      { label: 'T[a+, b-] where let T = m(1,2;3,4)', input: 'T[a+, b-] where let T = m(1,2;3,4)', tip: 'Attach explicit index labels to a rank-2 tensor' },
+      { label: 'contract(T[a+, b-], w[b+]) where ...', input: 'contract(T[a+, b-], w[b+]) where let T = m(1,2;3,4); let w = v(5,6)', tip: 'Contract on shared index b \u2014 result has free index a' },
+      { label: 'contract(w[a-], T[a+, b-]) where ...', input: 'contract(w[a-], T[a+, b-]) where let w = cv(1,2); let T = m(1,2;3,4)', tip: 'Covector contracts with first slot of rank-2 tensor' },
+      { label: 'contract(A[a+, b-]) where ...', input: 'contract(A[a+, a-]) where let A = m(1,2;3,4)', tip: 'Self-contraction: repeated index a with opposite variance \u2192 trace' },
     ]
   },
   {
@@ -4252,6 +4621,21 @@ function renderEnvPanel() {
       var entry = document.createElement('div');
       entry.className = 'env-entry';
       entry.innerHTML = '<span class="env-name">' + k + '</span> <span class="env-type">: ' + tensorTypeString(v) + '</span><br>' + v.display;
+      sec.appendChild(entry);
+    });
+    $envBody.appendChild(sec);
+  }
+
+  var bKeys = Object.keys(replEnv.bases || {});
+  if (bKeys.length > 0) {
+    hasContent = true;
+    var sec = document.createElement('div');
+    sec.innerHTML = '<div class="env-section-title">Bases</div>';
+    bKeys.forEach(function(k) {
+      var b = replEnv.bases[k];
+      var entry = document.createElement('div');
+      entry.className = 'env-entry';
+      entry.innerHTML = '<span class="env-name">' + k + '</span> for ' + b.space + ' (dim ' + b.dim + ')';
       sec.appendChild(entry);
     });
     $envBody.appendChild(sec);

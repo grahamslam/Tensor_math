@@ -12,6 +12,7 @@ Open `index.html` in a browser. No build step, no dependencies.
 | `cv(1,2) @ v(3,4)` | `11 (scalar)` | Covector contracts with vector |
 | `m(1,2;3,4) @ v(5,6)` | `[17, 39] (vector)` | Matrix-vector contraction |
 | `m(1,2;3,4) @ m(5,6;7,8)` | `[[19,22],[43,50]]` | Matrix multiplication |
+| `contract(T[a+,b-], v[b+])` | `[17, 39][a+]` | Index-aware contraction by label |
 | `christoffel(g, dg)` | `{T^0_{11}=...}` | Christoffel symbols from metric |
 | `riemann(g, dg, ddg)` | Riemann, Ricci, R, K | Full curvature pipeline |
 
@@ -33,8 +34,19 @@ Open `index.html` in a browser. No build step, no dependencies.
 - `christoffel(g, dg)` — Christoffel symbols from metric + first derivatives
 - `riemann(g, dg, ddg)` — Riemann tensor, Ricci tensor, scalar curvature, Gaussian curvature (2D)
 
+**Indexed notation (TLS-native)**
+- `T[a+, b-]` — attach typed index labels to any tensor
+- `contract(T[a+, b-], v[b+])` — contract by matching index labels
+- `contract(A[a+, a-])` — self-contraction (trace) by repeated label
+- Free/bound index tracking with variance and space validation
+- Strict-mode rejection of ambiguous implicit contractions in `*`
+
+**Basis/representation split**
+- `basis e for V` — declare a basis for a space (REPL)
+- `components(T, e)` — extract components relative to a basis, separating representation from identity
+
 **Environment**
-- REPL tab with persistent declarations: `ring`, `space`, `tensor`, `metric`
+- REPL tab with persistent declarations: `ring`, `space`, `tensor`, `metric`, `basis`
 - `where` clauses for inline local bindings
 - Strict and Educational evaluation modes
 - Full TLS v0.2 specification embedded in the Specification tab
@@ -85,7 +97,7 @@ The calculator implements most of **TLS-Core** and **TLS-Geom**:
 
 It also reaches into **TLS-Calc** territory with Christoffel symbols and Riemann curvature.
 
-Not yet implemented: indexed notation `T[a+,b-]`, basis declarations, Einstein summation convention, covariant derivatives.
+Not yet implemented: Einstein summation convention, covariant derivatives, change-of-basis transformations.
 
 ## License
 
