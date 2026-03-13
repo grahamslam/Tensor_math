@@ -68,11 +68,9 @@ riemann(m(1,0;0,0.75), t3(0,0;0,0.866|0,0;0,0), t3(0,0;0,-1|0,0;0,0|0,0;0,0|0,0;
 
 ```
 index.html                              Single-file calculator (HTML/CSS/JS)
-tensor_standard_math_calculator.jsx     Original React source
 docs/
   tensor_language_formal_spec.md        TLS v0.1 draft
   tensor_language_formal_spec_v0.2.md   TLS v0.2 (current)
-  critique1.md                          Spec review notes
 ```
 
 ## TLS compliance
