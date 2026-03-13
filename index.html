@@ -1,0 +1,4569 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tensor Standard Math Calculator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@300;400;500;600&family=Crimson+Pro:ital,wght@0,300;0,400;1,300&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg-deep: #0d0d0f;
+  --bg-panel: #141418;
+  --bg-inset: #1a1a20;
+  --bg-hover: #1f1f28;
+  --border: #2a2a35;
+  --border-warm: #3d3526;
+  --text-primary: #e8e4dc;
+  --text-secondary: #8a8690;
+  --text-dim: #5a5660;
+  --accent-gold: #d4a843;
+  --accent-amber: #c4873a;
+  --accent-warm: #a06830;
+  --accent-glow: #d4a84340;
+  --accent-blue: #5b8fb9;
+  --accent-green: #6b9b6b;
+  --accent-rose: #b07080;
+  --accent-violet: #8b7bb8;
+  --error: #c45555;
+  --error-bg: #c4555510;
+  --warning: #c4a855;
+  --radius: 6px;
+  --radius-lg: 10px;
+}
+
+html {
+  font-size: 15px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  font-family: 'Crimson Pro', Georgia, serif;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* Subtle grain overlay */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* ─── Layout ─── */
+.app {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem 4rem;
+}
+
+/* ─── Header ─── */
+.header {
+  margin-bottom: 2.5rem;
+  position: relative;
+}
+
+.header::after {
+  content: '';
+  position: absolute;
+  bottom: -1.2rem;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border-warm) 20%, var(--accent-gold) 50%, var(--border-warm) 80%, transparent);
+  opacity: 0.5;
+}
+
+.header h1 {
+  font-family: 'Cormorant Garamond', Georgia, serif;
+  font-weight: 600;
+  font-size: 2.2rem;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  line-height: 1.1;
+}
+
+.header h1 span {
+  color: var(--accent-gold);
+}
+
+.header p {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin-top: 0.4rem;
+  font-style: italic;
+  font-weight: 300;
+}
+
+/* ─── Input Area ─── */
+.input-area {
+  display: grid;
+  grid-template-columns: 1fr 160px;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+  animation: fadeInUp 0.5s ease both;
+}
+
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.expr-input {
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 1.05rem;
+  font-weight: 400;
+  padding: 0.85rem 1.1rem;
+  border-radius: var(--radius-lg);
+  outline: none;
+  transition: border-color 0.25s, box-shadow 0.25s;
+}
+
+.expr-input:focus {
+  border-color: var(--accent-gold);
+  box-shadow: 0 0 0 3px var(--accent-glow);
+}
+
+.expr-input::placeholder {
+  color: var(--text-dim);
+  font-weight: 300;
+}
+
+.mode-select {
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-family: 'Crimson Pro', serif;
+  font-size: 0.95rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238a8690' fill='none' stroke-width='1.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  transition: border-color 0.2s;
+}
+
+.mode-select:focus { border-color: var(--accent-gold); }
+
+/* ─── Examples ─── */
+.examples {
+  margin-bottom: 1.5rem;
+  animation: fadeInUp 0.5s ease 0.1s both;
+}
+
+.example-level {
+  margin-bottom: 0.75rem;
+}
+
+.example-level-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  cursor: pointer;
+  padding: 0.35rem 0;
+  user-select: none;
+}
+
+.example-level-header:hover .level-label {
+  opacity: 1;
+}
+
+.level-pip {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.level-label {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.7;
+  transition: opacity 0.2s;
+}
+
+.level-chevron {
+  font-size: 0.6rem;
+  opacity: 0.4;
+  transition: transform 0.25s ease, opacity 0.2s;
+  margin-left: auto;
+}
+
+.example-level.open .level-chevron {
+  transform: rotate(90deg);
+  opacity: 0.7;
+}
+
+.example-level-body {
+  display: none;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.35rem 0 0.35rem 1.1rem;
+}
+
+.example-level.open .example-level-body {
+  display: flex;
+}
+
+.example-btn {
+  position: relative;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.75rem;
+  font-weight: 400;
+  padding: 0.4rem 0.75rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.example-btn:hover {
+  background: var(--bg-hover);
+  color: var(--accent-gold);
+}
+
+.example-btn:active {
+  transform: scale(0.97);
+}
+
+.example-btn .ex-tooltip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-deep);
+  border: 1px solid var(--border-warm);
+  color: var(--text-secondary);
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 0.78rem;
+  font-style: italic;
+  padding: 0.4rem 0.7rem;
+  border-radius: 4px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 20;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+}
+
+.example-btn .ex-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: var(--border-warm);
+}
+
+.example-btn:hover .ex-tooltip {
+  display: block;
+}
+
+/* Level accent colors */
+.level-color-1 { --level-accent: #7eb8a0; }
+.level-color-2 { --level-accent: #b8a07e; }
+.level-color-3 { --level-accent: #7e9ab8; }
+.level-color-4 { --level-accent: #b87ea0; }
+.level-color-5 { --level-accent: #c47e6a; }
+
+.level-pip { background: var(--level-accent); }
+.level-label { color: var(--level-accent); }
+
+.level-color-6 { --level-accent: #a0b87e; }
+
+.level-color-1 .example-btn:hover { border-color: #7eb8a0; }
+.level-color-2 .example-btn:hover { border-color: #b8a07e; }
+.level-color-3 .example-btn:hover { border-color: #7e9ab8; }
+.level-color-4 .example-btn:hover { border-color: #b87ea0; }
+.level-color-5 .example-btn:hover { border-color: #c47e6a; }
+.level-color-6 .example-btn:hover { border-color: #a0b87e; }
+
+/* ─── Syntax hint ─── */
+.syntax-hint {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--accent-warm);
+  padding: 0.65rem 1rem;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  margin-bottom: 2rem;
+  animation: fadeInUp 0.5s ease 0.15s both;
+}
+
+.syntax-hint code {
+  font-family: 'IBM Plex Mono', monospace;
+  color: var(--accent-gold);
+  font-size: 0.8rem;
+  background: var(--bg-inset);
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+}
+
+/* ─── Tabs ─── */
+.tabs {
+  animation: fadeInUp 0.5s ease 0.2s both;
+}
+
+.tab-list {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 1.5rem;
+}
+
+.tab-btn {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.05rem;
+  font-weight: 600;
+  padding: 0.7rem 1.3rem;
+  cursor: pointer;
+  position: relative;
+  transition: color 0.2s;
+  letter-spacing: 0.01em;
+}
+
+.tab-btn:hover { color: var(--text-secondary); }
+
+.tab-btn.active {
+  color: var(--accent-gold);
+}
+
+.tab-btn.active::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0.5rem;
+  right: 0.5rem;
+  height: 2px;
+  background: var(--accent-gold);
+  border-radius: 1px;
+}
+
+.tab-panel { display: none; }
+.tab-panel.active { display: block; }
+
+/* ─── Result Panel ─── */
+.result-grid {
+  display: grid;
+  grid-template-columns: 1.3fr 0.7fr;
+  gap: 1.2rem;
+}
+
+@media (max-width: 768px) {
+  .input-area { grid-template-columns: 1fr; }
+  .result-grid { grid-template-columns: 1fr; }
+}
+
+.card {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.card-header {
+  padding: 1rem 1.2rem 0.6rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.card-header h3 {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 600;
+  font-size: 1.1rem;
+  color: var(--text-secondary);
+}
+
+.card-header .icon {
+  color: var(--accent-gold);
+  font-size: 0.9rem;
+  opacity: 0.7;
+}
+
+.card-body {
+  padding: 0.4rem 1.2rem 1.2rem;
+}
+
+/* ─── Readout blocks ─── */
+.readout {
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.readout-label {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-dim);
+  margin-bottom: 0.3rem;
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 500;
+}
+
+.readout-value {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 1rem;
+  font-weight: 400;
+  color: var(--text-primary);
+  word-break: break-all;
+}
+
+.readout-value.large {
+  font-size: 1.6rem;
+  font-weight: 500;
+  color: var(--accent-gold);
+}
+
+.readout-value.error {
+  color: var(--error);
+  font-size: 0.9rem;
+}
+
+/* ─── Type badges ─── */
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+.badge {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: 0.25rem 0.6rem;
+  border-radius: 3px;
+  border: 1px solid;
+}
+
+.badge-kind { border-color: var(--accent-blue); color: var(--accent-blue); background: #5b8fb910; }
+.badge-rank { border-color: var(--accent-green); color: var(--accent-green); background: #6b9b6b10; }
+.badge-space { border-color: var(--accent-violet); color: var(--accent-violet); background: #8b7bb810; }
+.badge-var { border-color: var(--accent-rose); color: var(--accent-rose); background: #b0708010; }
+
+/* ─── Explanation text ─── */
+.explanation {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  font-style: italic;
+  font-weight: 300;
+  line-height: 1.5;
+  padding: 0.6rem 0.8rem;
+  background: var(--bg-inset);
+  border-radius: var(--radius);
+  border-left: 2px solid var(--border-warm);
+}
+
+/* ─── Trace ─── */
+.trace-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.trace-step {
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.7rem 1rem;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.8rem;
+  font-weight: 300;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  position: relative;
+  padding-left: 2.5rem;
+  opacity: 0;
+  animation: traceIn 0.3s ease forwards;
+}
+
+.trace-step::before {
+  content: attr(data-index);
+  position: absolute;
+  left: 0.8rem;
+  top: 0.7rem;
+  font-size: 0.65rem;
+  color: var(--text-dim);
+  font-weight: 500;
+}
+
+@keyframes traceIn {
+  from { opacity: 0; transform: translateX(-6px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.trace-empty {
+  color: var(--text-dim);
+  font-style: italic;
+  font-size: 0.9rem;
+  padding: 2rem;
+  text-align: center;
+}
+
+/* ─── Theory ─── */
+.theory-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+@media (max-width: 768px) {
+  .theory-grid { grid-template-columns: 1fr; }
+}
+
+.theory-card .card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.theory-rule {
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.85rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+.theory-rule strong {
+  color: var(--accent-gold);
+  font-weight: 600;
+}
+
+/* ─── Conversion rules sidebar ─── */
+.main-grid {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 1.2rem;
+  margin-bottom: 2rem;
+  animation: fadeInUp 0.5s ease 0.05s both;
+}
+
+@media (max-width: 768px) {
+  .main-grid { grid-template-columns: 1fr; }
+}
+
+.rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.rule-item {
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.85rem;
+  font-size: 0.84rem;
+  color: var(--text-secondary);
+  line-height: 1.45;
+}
+
+/* ─── Error display ─── */
+.error-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin-top: 0.5rem;
+}
+
+.error-item {
+  background: var(--error-bg);
+  border: 1px solid #c4555530;
+  border-left: 3px solid var(--error);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.78rem;
+  color: var(--error);
+  line-height: 1.4;
+}
+
+.error-type {
+  font-weight: 600;
+  color: #e06666;
+  margin-right: 0.4rem;
+}
+
+.error-pos {
+  color: var(--text-dim);
+  font-size: 0.7rem;
+  margin-left: 0.3rem;
+}
+
+.error-pointer {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  white-space: pre;
+  margin-top: 0.2rem;
+  line-height: 1.2;
+}
+
+.error-pointer .caret {
+  color: var(--error);
+  font-weight: 700;
+}
+
+/* ─── REPL Tab ─── */
+.repl-container {
+  display: grid;
+  grid-template-columns: 1fr 300px;
+  gap: 1.2rem;
+}
+
+@media (max-width: 768px) {
+  .repl-container { grid-template-columns: 1fr; }
+}
+
+.repl-editor-wrap {
+  position: relative;
+}
+
+.repl-editor {
+  display: flex;
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  min-height: 280px;
+}
+
+.repl-line-numbers {
+  background: var(--bg-panel);
+  padding: 0.75rem 0;
+  min-width: 2.8rem;
+  text-align: right;
+  border-right: 1px solid var(--border);
+  user-select: none;
+  overflow: hidden;
+}
+
+.repl-line-numbers .line-num {
+  display: block;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--text-dim);
+  padding: 0 0.5rem;
+  line-height: 1.65rem;
+}
+
+.repl-textarea {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.88rem;
+  font-weight: 400;
+  padding: 0.75rem 1rem;
+  resize: vertical;
+  outline: none;
+  line-height: 1.65rem;
+  min-height: 280px;
+  tab-size: 2;
+}
+
+.repl-textarea::placeholder {
+  color: var(--text-dim);
+  font-weight: 300;
+}
+
+.repl-buttons {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.repl-btn {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 0.95rem;
+  font-weight: 600;
+  padding: 0.55rem 1.3rem;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.repl-btn:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-warm);
+  color: var(--accent-gold);
+}
+
+.repl-btn-primary {
+  background: var(--border-warm);
+  border-color: var(--accent-warm);
+  color: var(--accent-gold);
+}
+
+.repl-btn-primary:hover {
+  background: var(--accent-warm);
+  color: var(--text-primary);
+}
+
+.repl-output {
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 0.75rem 1rem;
+  margin-top: 0.75rem;
+  max-height: 300px;
+  overflow-y: auto;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+
+.repl-output-line {
+  padding: 0.15rem 0;
+  border-bottom: 1px solid #2a2a3520;
+}
+
+.repl-output-line.repl-ok {
+  color: var(--accent-green);
+}
+
+.repl-output-line.repl-result {
+  color: var(--accent-gold);
+}
+
+.repl-output-line.repl-error {
+  color: var(--error);
+}
+
+.repl-output-line .line-prefix {
+  color: var(--text-dim);
+  margin-right: 0.5rem;
+  user-select: none;
+}
+
+/* ─── Environment sidebar ─── */
+.env-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.env-section {
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.6rem 0.85rem;
+}
+
+.env-section-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 600;
+  font-size: 0.9rem;
+  color: var(--accent-gold);
+  margin-bottom: 0.4rem;
+}
+
+.env-entry {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  padding: 0.15rem 0;
+  line-height: 1.4;
+}
+
+.env-entry .env-name {
+  color: var(--accent-blue);
+  font-weight: 500;
+}
+
+.env-entry .env-type {
+  color: var(--text-dim);
+}
+
+.env-empty {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  font-style: italic;
+}
+
+/* ─── Scrollbar ─── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg-deep); }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+/* ─── Spec Tab ─── */
+.spec-container {
+  max-width: 860px;
+}
+
+.spec-meta {
+  display: flex;
+  gap: 1rem;
+  align-items: baseline;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.spec-version {
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: var(--accent-gold);
+}
+
+.spec-status {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+.spec-controls {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 1.2rem;
+}
+
+.spec-toggle-btn {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  padding: 0.35rem 0.8rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.spec-toggle-btn:hover {
+  border-color: var(--border-warm);
+  color: var(--accent-gold);
+}
+
+.spec-section {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-bottom: 0.6rem;
+  background: var(--bg-panel);
+  overflow: hidden;
+}
+
+.spec-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.7rem 1rem;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.15s;
+}
+
+.spec-section-header:hover {
+  background: var(--bg-hover);
+}
+
+.spec-chevron {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  transition: transform 0.25s ease;
+  flex-shrink: 0;
+  width: 1rem;
+  text-align: center;
+}
+
+.spec-section.open .spec-chevron {
+  transform: rotate(90deg);
+}
+
+.spec-section-title {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.spec-section-num {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--accent-warm);
+  font-weight: 500;
+  min-width: 2rem;
+}
+
+.spec-section-body {
+  display: none;
+  padding: 0 1.2rem 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.spec-section.open .spec-section-body {
+  display: block;
+}
+
+/* Spec content rendering */
+.spec-section-body h3 {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--accent-gold);
+  margin: 1rem 0 0.4rem;
+}
+
+.spec-section-body h4 {
+  font-family: 'Cormorant Garamond', serif;
+  font-weight: 600;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  margin: 0.8rem 0 0.3rem;
+}
+
+.spec-section-body p {
+  font-size: 0.88rem;
+  line-height: 1.6;
+  color: var(--text-secondary);
+  margin: 0.4rem 0;
+}
+
+.spec-section-body ul, .spec-section-body ol {
+  padding-left: 1.4rem;
+  margin: 0.4rem 0;
+}
+
+.spec-section-body li {
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--text-secondary);
+  margin: 0.2rem 0;
+}
+
+.spec-section-body code {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.8rem;
+  background: var(--bg-inset);
+  color: var(--accent-gold);
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+}
+
+.spec-section-body pre {
+  background: var(--bg-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 0.75rem 1rem;
+  margin: 0.5rem 0;
+  overflow-x: auto;
+  line-height: 1.5;
+}
+
+.spec-section-body pre code {
+  background: none;
+  padding: 0;
+  font-size: 0.78rem;
+  color: var(--text-primary);
+}
+
+.spec-section-body strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.spec-section-body em {
+  color: var(--text-secondary);
+}
+
+.spec-section-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0.6rem 0;
+  font-size: 0.8rem;
+}
+
+.spec-section-body th {
+  background: var(--bg-inset);
+  color: var(--accent-gold);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-align: left;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid var(--border);
+}
+
+.spec-section-body td {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+  vertical-align: top;
+}
+
+.spec-section-body hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 0.8rem 0;
+}
+
+.spec-changelog-table td:first-child {
+  font-family: 'IBM Plex Mono', monospace;
+  color: var(--accent-warm);
+  font-weight: 500;
+  text-align: center;
+  width: 2rem;
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Header -->
+  <header class="header">
+    <h1>Tensor <span>Standard</span> Math</h1>
+    <p>Ordinary arithmetic reinterpreted as typed tensor operations</p>
+  </header>
+
+  <!-- Main input + rules -->
+  <div class="main-grid">
+    <div>
+      <div class="input-area">
+        <input type="text" class="expr-input" id="exprInput" value="1 + 2"
+               placeholder="e.g. 2 * v(3,4), cv(1,2) @ v(3,4), trace(m(1,0;0,1))" spellcheck="false" autocomplete="off">
+        <select class="mode-select" id="modeSelect">
+          <option value="strict">Strict</option>
+          <option value="educational">Educational</option>
+        </select>
+      </div>
+
+      <div class="examples" id="examples"></div>
+
+      <div class="syntax-hint">
+        Literals: numbers <code>2</code>, vectors <code>v(1,2)</code>, covectors <code>cv(3,4)</code>,
+        matrices <code>m(1,2;3,4)</code>, rank-3 <code>t3(a,b;c,d|e,f;g,h)</code>.
+        Operators: <code>+</code> <code>-</code> add/sub,
+        <code>*</code> tensor product, <code>@</code> contract.
+        Functions: <code>trace</code> <code>det</code> <code>inv</code> <code>transpose</code>
+        <code>norm</code> <code>identity</code> <code>raise</code> <code>lower</code>
+        <code>sym</code> <code>antisym</code> <code>eigenvalues</code> <code>contract</code>.
+        GR: <code>christoffel(g, dg)</code> <code>riemann(g, dg, ddg)</code>.
+        Where: <code>v + w where let v = v(1,2); let w = v(3,4)</code>.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header">
+        <span class="icon">&#x2699;</span>
+        <h3>Conversion Rules</h3>
+      </div>
+      <div class="card-body">
+        <div class="rules-list" id="rulesContainer"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <div class="tab-list">
+      <button class="tab-btn active" data-tab="result">Result</button>
+      <button class="tab-btn" data-tab="trace">Trace</button>
+      <button class="tab-btn" data-tab="theory">Theory</button>
+      <button class="tab-btn" data-tab="repl">REPL</button>
+      <button class="tab-btn" data-tab="spec">Specification</button>
+    </div>
+
+    <!-- Result tab -->
+    <div class="tab-panel active" id="tab-result">
+      <div class="result-grid">
+        <div class="card">
+          <div class="card-header">
+            <span class="icon">&#x2261;</span>
+            <h3>Interpretation</h3>
+          </div>
+          <div class="card-body">
+            <div class="readout">
+              <div class="readout-label">Input</div>
+              <div class="readout-value" id="dispInput">&mdash;</div>
+            </div>
+            <div class="readout">
+              <div class="readout-label">Tensor-form expression</div>
+              <div class="readout-value" id="dispTensor">&mdash;</div>
+            </div>
+            <div class="readout">
+              <div class="readout-label">Symbolic parse tree</div>
+              <div class="readout-value" id="dispAST">&mdash;</div>
+            </div>
+            <div id="errorDisplay"></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header">
+            <span class="icon">&#x03A3;</span>
+            <h3>Output</h3>
+          </div>
+          <div class="card-body">
+            <div class="readout" id="resultBlock">
+              <div class="readout-label">Result value</div>
+              <div class="readout-value large" id="dispResult">&mdash;</div>
+            </div>
+            <div class="badges" id="badgesContainer"></div>
+            <div class="explanation" id="dispExplanation">&mdash;</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Trace tab -->
+    <div class="tab-panel" id="tab-trace">
+      <div class="card">
+        <div class="card-header">
+          <span class="icon">&#x2192;</span>
+          <h3>Evaluation Trace</h3>
+        </div>
+        <div class="card-body">
+          <div class="trace-list" id="traceContainer">
+            <div class="trace-empty">No trace yet.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Theory tab -->
+    <div class="tab-panel" id="tab-theory">
+      <div class="theory-grid">
+        <div class="card theory-card">
+          <div class="card-header">
+            <span class="icon">{}</span>
+            <h3>Core Rules</h3>
+          </div>
+          <div class="card-body">
+            <div class="theory-rule">Scalars are <strong>rank-0</strong> tensors.</div>
+            <div class="theory-rule">Addition requires <strong>identical tensor type</strong>.</div>
+            <div class="theory-rule">Tensor product combines structure <strong>without collapsing</strong> it.</div>
+            <div class="theory-rule">Contraction is <strong>explicit</strong> and dimension-aware.</div>
+            <div class="theory-rule">Subtraction desugars to <strong>A + (-1) * B</strong>.</div>
+          </div>
+        </div>
+
+        <div class="card theory-card">
+          <div class="card-header">
+            <h3>What 1 + 2 means here</h3>
+          </div>
+          <div class="card-body">
+            <div class="theory-rule"><strong>1</strong> is promoted to T[] with value 1.</div>
+            <div class="theory-rule"><strong>2</strong> is promoted to T[] with value 2.</div>
+            <div class="theory-rule">T[] + T[] is valid because both are <strong>rank-0</strong>.</div>
+            <div class="theory-rule">Result <strong>3</strong> is also T[]: scalar arithmetic is a special case of tensor arithmetic.</div>
+          </div>
+        </div>
+
+        <div class="card theory-card">
+          <div class="card-header">
+            <span class="icon">&#x0192;</span>
+            <h3>Layer 2 Operations</h3>
+          </div>
+          <div class="card-body">
+            <div class="theory-rule"><strong>trace(M)</strong> sums diagonal elements of a square matrix.</div>
+            <div class="theory-rule"><strong>det(M)</strong> computes the determinant (2x2, 3x3).</div>
+            <div class="theory-rule"><strong>inv(M)</strong> returns the inverse with <strong>swapped variance</strong>.</div>
+            <div class="theory-rule"><strong>transpose(M)</strong> swaps rows/cols and variance.</div>
+            <div class="theory-rule"><strong>norm(v)</strong> returns the Euclidean norm as a scalar.</div>
+            <div class="theory-rule"><strong>identity(n)</strong> creates an n&times;n identity matrix.</div>
+            <div class="theory-rule"><strong>lower(v, g)</strong> lowers a vector with metric g &rarr; covector.</div>
+            <div class="theory-rule"><strong>raise(&omega;, g)</strong> raises a covector with metric g &rarr; vector.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Spec raw content (hidden) -->
+    <script type="text/plain" id="specRawContent">
+## Version
+
+**TLS 0.2**
+
+---
+
+## Status
+
+Formal specification for a tensor-native symbolic mathematics language.
+
+---
+
+## Changelog from TLS 0.1
+
+| # | Change | Sections affected |
+|---|--------|-------------------|
+| 1 | `@` operator restricted to three canonical contraction forms; all others require `contract(...)` | 7.3, 6.7, 11.6 |
+| 2 | Dimension well-formedness rule: dimension lives on the space, tensors must conform | 6.11 (new) |
+| 3 | `field` keyword renamed to `ring`; `field` reserved for tensor fields in TLS-Calc | 4.2, 5.1, all examples |
+| 4 | Tensor field roadmap section added for TLS-Calc with reserved syntax | 16 (new) |
+| 5 | Symmetry propagation rules: addition, product, contraction | 6.12 (new) |
+| 6 | Negation and subtraction defined as syntactic sugar | 6.13 (new), 7.9-7.10 (new), EBNF |
+| 7 | `where` clause defined as local scoped declarations | 5.7 (new), EBNF |
+| 8 | Standard library expanded with `det`, `inv`, `norm`, `eigenvalues` (guarded) | 13 |
+| 9 | Statement delimiters defined: newline-terminated, optional `;` | EBNF |
+| 10 | Conformance test section added with normative expected outputs | 15 (new) |
+
+---
+
+## 1. Purpose
+
+Tensor Language Specification (TLS) defines a mathematical language in which the primitive semantic object is a **typed tensor**. Scalars, vectors, covectors, matrices, linear maps, and higher-order multilinear objects are all treated as specializations of tensor objects rather than separate foundational categories.
+
+TLS is designed to support:
+
+- symbolic tensor manipulation
+- tensor-safe arithmetic
+- explicit type checking
+- basis-aware and basis-independent reasoning
+- conversion of ordinary arithmetic into tensor-standard form
+- extensibility toward calculus, geometry, and physics
+
+---
+
+## 2. Design Principles
+
+### 2.1 Tensor-First Semantics
+Every value denotes a tensor object, including rank-0 values.
+
+### 2.2 Typed Indices
+Every tensor index belongs to a declared space and carries declared variance.
+
+### 2.3 Structure Before Representation
+A tensor is not identical to its component array. Components are one representation of a tensor under a chosen basis.
+
+### 2.4 Explicit Interaction
+Tensor contraction must be explicit unless a declared operator introduces a standard contraction rule.
+
+### 2.5 Validity by Type
+An expression is well-formed only if all tensor operations satisfy index, space, and variance constraints.
+
+### 2.6 Extra Structure Is Never Implicit
+Metrics, symplectic forms, orientations, volume forms, and connections must be declared before they are used.
+
+---
+
+## 3. Core Semantic Model
+
+### 3.1 Primitive Semantic Object
+A tensor object is defined as:
+
+- an ordered index signature
+- a value domain
+- a transformation law
+- optional symmetry constraints
+- optional representation data
+
+### 3.2 Index Signature
+An index signature is an ordered list of typed index slots.
+
+Each index slot contains:
+
+- **label**: symbolic identifier
+- **space**: declared space name
+- **variance**: contravariant (`+`) or covariant (`-`)
+- **role**: free or bound
+
+### 3.3 Tensor Type
+A tensor type is determined by:
+
+- coefficient ring
+- ordered list of spaces
+- ordered list of variances
+- symmetry annotations
+- optional declared interpretation
+
+Examples:
+
+- scalar: `Tensor<>`
+- vector in `V`: `Tensor<V+>`
+- covector in `V`: `Tensor<V->`
+- mixed rank-2 tensor: `Tensor<V+,V->`
+- symmetric rank-2 covariant tensor on `V`: `Tensor<V-,V->{sym(1,2)}`
+
+### 3.4 Scalars
+A scalar is a tensor of rank 0 with empty index signature.
+
+### 3.5 Rank
+The rank of a tensor is the number of free index slots in its type.
+
+### 3.6 Equality
+Two tensor expressions are type-equal only if they share the same tensor type.
+Two tensors are semantically equal only if they denote the same tensor object under the declared structure.
+
+---
+
+## 4. Lexical Elements
+
+### 4.1 Identifiers
+Identifiers SHALL begin with a letter or underscore and MAY contain letters, digits, and underscores.
+
+Examples:
+
+- `T`
+- `g`
+- `velocity`
+- `_tmp1`
+
+### 4.2 Reserved Keywords
+The following keywords are reserved:
+
+- `ring`
+- `space`
+- `tensor`
+- `metric`
+- `connection`
+- `sym`
+- `antisym`
+- `let`
+- `type`
+- `contract`
+- `raise`
+- `lower`
+- `basis`
+- `invariant`
+- `where`
+- `assert`
+- `det`
+- `inv`
+- `norm`
+- `eigenvalues`
+
+The following keywords are reserved for future use and SHALL NOT be used as identifiers:
+
+- `field` (reserved for tensor fields in TLS-Calc)
+- `manifold`
+- `bundle`
+- `tensorfield`
+
+### 4.3 Literals
+TLS 0.2 supports the following literal classes:
+
+- integer literals
+- decimal literals
+- vector literals
+- covector literals
+- matrix literals
+- tensor constructor literals
+
+Examples:
+
+- `1`
+- `2.5`
+- `v(1,2,3)`
+- `cv(4,5,6)`
+- `m(1,2;3,4)`
+
+### 4.4 Comments
+Line comments begin with `#`.
+
+---
+
+## 5. Syntactic Forms
+
+### 5.1 Declarations
+
+#### Ring Declaration
+```tls
+ring R
+```
+
+Declares a coefficient ring. All spaces and tensors inherit their scalar domain from a declared ring.
+
+#### Space Declaration
+```tls
+space V over R dim 3
+space W over R dim 2
+```
+
+The `dim` clause declares the finite dimension of the space. Dimension is a property of the space, not of individual tensor types. See Section 6.11 for the well-formedness rule this induces.
+
+#### Tensor Declaration
+```tls
+tensor T : Tensor<V+,V->
+tensor g : Tensor<V-,V-> {sym(1,2)}
+```
+
+#### Metric Declaration
+```tls
+metric g : Tensor<V-,V-> {sym(1,2), nondegenerate}
+```
+
+#### Connection Declaration
+```tls
+connection nabla on V compatible g
+```
+
+### 5.2 Binding
+```tls
+let x = 3
+let v = v(1,2,3)
+let A = m(1,2;3,4)
+```
+
+### 5.3 Type Alias
+```tls
+type EndV = Tensor<V+,V->
+```
+
+### 5.4 Indexed Form
+Indexed notation is a core syntax.
+
+```tls
+T[a+, b-]
+g[a-, b-]
+v[a+]
+omega[a-]
+```
+
+Interpretation rules:
+
+- index labels are symbolic placeholders
+- `+` denotes contravariant slot
+- `-` denotes covariant slot
+- labels with identical names MAY become eligible for contraction when one is upper and one is lower in a compatible context
+
+### 5.5 Grouping
+```tls
+(T[a+, b-] * v[c+])
+```
+
+### 5.6 Function-Style Tensor Operators
+```tls
+contract(T[a+, b-], v[b+])
+raise(omega[a-], g)
+lower(v[a+], g)
+sym(T[a-, b-])
+antisym(F[a-, b-])
+det(A)
+inv(A)
+```
+
+### 5.7 Where Clause
+
+The `where` keyword introduces a local declaration scope attached to a single expression or statement. Bindings introduced by `where` exist only for the evaluation of the attached expression.
+
+Syntax:
+
+```tls
+<expression> where
+  <declaration>
+  <declaration>
+  ...
+```
+
+Example:
+
+```tls
+contract(T[a+, b-], v[b+]) where
+  space V over R dim 3
+  tensor T : Tensor<V+, V->
+  tensor v : Tensor<V+>
+```
+
+Semantics:
+
+- `where` introduces a temporary typing environment.
+- All declarations within the `where` block are visible only to the attached expression.
+- Inner declarations shadow outer declarations of the same name.
+- `where` blocks MAY be nested.
+- A `where` block SHALL NOT contain statements (e.g., `let` bindings that persist beyond the expression are not permitted; use `let` inside `where` only as local temporaries).
+
+---
+
+## 6. Type System
+
+### 6.1 Type Components
+Each type contains:
+
+- scalar domain (the declared ring)
+- ordered slots
+- slot variances
+- slot spaces
+- optional symmetry markers
+- optional structure dependencies
+
+### 6.2 Type Judgment
+A judgment has the form:
+
+```tls
+Gamma |- expr : Type
+```
+
+where `Gamma` is the typing environment.
+
+### 6.3 Scalar Promotion
+Numeric literals SHALL be promoted to rank-0 tensor type over the current default ring.
+
+Example:
+
+```tls
+1 : Tensor<>
+```
+
+### 6.4 Addition Rule
+Addition is valid iff both operands have identical tensor type (same ring, same slots, same variances, same spaces).
+
+```
+Gamma |- A : X
+Gamma |- B : X
+-----------------
+Gamma |- A + B : X
+```
+
+See Section 6.12 for symmetry propagation under addition.
+
+### 6.5 Tensor Product Rule
+If `A` and `B` are tensors, then `A * B` denotes tensor product unless one operand is scalar.
+
+```
+Gamma |- A : Tensor<S1...Sn>
+Gamma |- B : Tensor<T1...Tm>
+---------------------------------
+Gamma |- A * B : Tensor<S1...Sn,T1...Tm>
+```
+
+If either side is rank-0, multiplication denotes scalar scaling.
+
+See Section 6.12 for symmetry propagation under tensor product.
+
+### 6.6 Contraction Rule
+Contraction is valid only when:
+
+- one slot is contravariant
+- one slot is covariant
+- both belong to compatible spaces
+- contraction does not violate declared symmetry structure
+
+```
+Gamma |- T : Tensor<...,V+,...,V-,...>
+--------------------------------------
+Gamma |- contract(T, i, j) : Tensor<...remaining slots...>
+```
+
+See Section 6.12 for symmetry propagation under contraction.
+
+### 6.7 Canonical Contraction via `@`
+
+The `@` operator is legal ONLY for the following canonical contraction forms:
+
+**Form 1: Covector @ Vector -> Scalar**
+```
+Gamma |- omega : Tensor<V->
+Gamma |- v : Tensor<V+>
+----------------------------
+Gamma |- omega @ v : Tensor<>
+```
+
+**Form 2: Rank-2 Mixed Tensor @ Vector -> Vector**
+```
+Gamma |- T : Tensor<V+, V->
+Gamma |- v : Tensor<V+>
+-----------------------------
+Gamma |- T @ v : Tensor<V+>
+```
+
+The contraction pairs the rightmost covariant slot of `T` with the contravariant slot of `v`.
+
+**Form 3: Covector @ Rank-2 Mixed Tensor -> Covector**
+```
+Gamma |- omega : Tensor<V->
+Gamma |- T : Tensor<V+, V->
+------------------------------
+Gamma |- omega @ T : Tensor<V->
+```
+
+The contraction pairs the covariant slot of `omega` with the leftmost contravariant slot of `T`.
+
+**All other uses of `@` SHALL raise an AmbiguityError.** In particular:
+
+- rank-2 @ rank-2 is NOT permitted via `@`
+- rank-3 or higher tensors are NOT permitted with `@`
+- same-variance pairings are NOT permitted with `@`
+
+These cases MUST use `contract(...)` with explicit slot specification.
+
+### 6.8 Indexed Contraction Rule
+If repeated index labels appear in a valid expression with opposite variance and matching space, an implementation MAY permit explicit indexed contraction under a strict mode flag.
+
+Example:
+
+```tls
+T[a+, b-] * v[b+]
+```
+
+In strict TLS 0.2, this SHOULD remain non-contracted unless wrapped by `contract(...)`.
+
+### 6.9 Raising and Lowering
+Raising and lowering are valid only when a compatible nondegenerate bilinear form is declared.
+
+```
+Gamma |- g : Tensor<V-,V->
+Gamma |- v : Tensor<V+>
+------------------------
+Gamma |- lower(v,g) : Tensor<V->
+```
+
+```
+Gamma |- g : Tensor<V-,V-> {nondegenerate}
+Gamma |- omega : Tensor<V->
+---------------------------------------------
+Gamma |- raise(omega,g) : Tensor<V+>
+```
+
+### 6.10 Symmetrization and Antisymmetrization
+```
+Gamma |- T : Tensor<slots>
+--------------------------
+Gamma |- sym(T, i, j) : Tensor<slots>{sym(i,j)}
+```
+
+```
+Gamma |- T : Tensor<slots>
+--------------------------
+Gamma |- antisym(T, i, j) : Tensor<slots>{antisym(i,j)}
+```
+
+### 6.11 Dimension Well-Formedness
+
+**Rule.** For any tensor with slots over declared finite-dimensional spaces, each represented axis MUST conform to the declared dimension of its corresponding space.
+
+Formally: if `space V over R dim n` is declared, then any concrete value assigned to a tensor type containing slot `V+` or `V-` MUST have exactly `n` components along that axis.
+
+This rule catches:
+
+- **Component count mismatch**: `v(1,2)` assigned to `Tensor<V+>` where `space V over R dim 3` is a well-formedness violation.
+- **Matrix shape mismatch**: `m(1,2,3;4,5,6)` assigned to `Tensor<V+,V->` where `space V over R dim 3` requires a 3x3 matrix, not 2x3.
+- **Cross-space shape mismatch**: `m(1,2;3,4)` assigned to `Tensor<V+,W->` requires the row count to match `dim V` and the column count to match `dim W`.
+- **Contraction shape consistency**: any contraction between slots over the same space is guaranteed to be dimensionally consistent because both slots inherit the same dimension from the space declaration.
+
+Dimension is a property of the space, not of the tensor type. The tensor type `Tensor<V+>` does not carry an independent dimension annotation; it derives its concrete dimension from the declaration of `V`.
+
+Implementations SHALL raise a TypeError or SpaceError when a concrete tensor value violates the dimension well-formedness rule.
+
+### 6.12 Symmetry Propagation Rules
+
+This section defines how symmetry annotations propagate through tensor operations. Unless stated otherwise, symmetry annotations refer to slot-pair symmetry markers of the form `{sym(i,j)}` or `{antisym(i,j)}`.
+
+#### 6.12.1 Addition
+
+- If both operands carry identical symmetry annotations, the result carries those same annotations.
+  ```
+  sym{S} + sym{S} -> sym{S}
+  antisym{S} + antisym{S} -> antisym{S}
+  ```
+- If operands carry different symmetry annotations (including one symmetric and one antisymmetric, or different slot groupings):
+  - **Strict mode**: the addition SHALL be rejected as a SymmetryError.
+  - **Relaxed mode**: the result is downgraded to an unspecialized tensor (all symmetry annotations are dropped).
+- Implementations MUST document which mode they use. TLS-Core conformance requires at least relaxed mode.
+
+#### 6.12.2 Tensor Product
+
+Tensor product does NOT automatically preserve whole-object symmetry.
+
+If `A : Tensor<V-,V->{sym(1,2)}` and `B : Tensor<W->`, then `A * B : Tensor<V-,V-,W->`. The symmetry annotation `{sym(1,2)}` MAY be preserved on the first two slots of the result if the implementation tracks per-slot-group symmetry. Whole-object symmetry of the product is NOT implied.
+
+Implementations that track slot-group symmetry SHOULD propagate compatible sub-annotations. Implementations that do not track slot-group symmetry SHALL drop all symmetry annotations on tensor product results.
+
+#### 6.12.3 Contraction
+
+When a contraction eliminates two slots, the symmetry of the result MUST be recomputed based on the surviving slots.
+
+- If the contracted slots are not involved in any symmetry annotation, surviving annotations are preserved with adjusted slot indices.
+- If a contracted slot participates in a symmetry annotation, that annotation is destroyed.
+- Contraction MAY induce new symmetry in the result. However, implementations are NOT required to detect induced symmetry; they MAY conservatively drop annotations.
+
+**Note.** Contraction can preserve, destroy, or induce symmetry. A fully general symmetry inference engine is outside the scope of TLS-Core but MAY be provided by implementations.
+
+#### 6.12.4 Scalar Multiplication
+
+Scalar multiplication preserves all symmetry annotations:
+```
+s * T{annotations} -> (s*T){annotations}
+```
+
+#### 6.12.5 Raising and Lowering
+
+Raising or lowering a slot changes its variance. Symmetry annotations involving that slot MUST be re-evaluated. If a symmetric pair `{sym(i,j)}` has one slot raised, the annotation is destroyed because the two slots now have different variance and occupy different spaces (V+ vs V-).
+
+### 6.13 Negation and Subtraction
+
+#### 6.13.1 Unary Negation
+
+Unary negation is defined as scalar multiplication by the additive inverse of the ring identity:
+
+```
+-T  ===  (-1) * T
+```
+
+The result type of `-T` is identical to the type of `T`, including all symmetry annotations.
+
+#### 6.13.2 Binary Subtraction
+
+Binary subtraction is syntactic sugar:
+
+```
+A - B  ===  A + (-1) * B
+```
+
+Subtraction is lowered to addition and scalar multiplication during parsing. All type-checking rules for addition (Section 6.4) apply to the desugared form.
+
+---
+
+## 7. Operator Semantics
+
+### 7.1 `+`
+Tensor addition. Requires exact type identity. See Section 6.12.1 for symmetry propagation.
+
+### 7.2 `*`
+Tensor product by default. Scalar scaling when one operand is rank 0. See Section 6.12.2 for symmetry behavior.
+
+### 7.3 `@`
+Canonical contraction operator. Legal ONLY for the three forms defined in Section 6.7:
+
+1. covector @ vector -> scalar
+2. rank-2 mixed tensor @ vector -> vector
+3. covector @ rank-2 mixed tensor -> covector
+
+All other uses SHALL raise an AmbiguityError.
+
+### 7.4 `contract(...)`
+Explicit contraction. The preferred and general-purpose contraction mechanism. Required for all contractions not covered by `@`.
+
+### 7.5 `raise(...)`
+Raises one compatible covariant slot using a declared inverse metric or pairing.
+
+### 7.6 `lower(...)`
+Lowers one compatible contravariant slot using a declared metric or pairing.
+
+### 7.7 `sym(...)`
+Projects to the symmetric component.
+
+### 7.8 `antisym(...)`
+Projects to the antisymmetric component.
+
+### 7.9 Unary `-`
+Negation. Equivalent to `(-1) * operand`. See Section 6.13.1.
+
+### 7.10 Binary `-`
+Subtraction. Syntactic sugar for `A + (-1) * B`. See Section 6.13.2.
+
+---
+
+## 8. Structural Objects
+
+### 8.1 Metric
+A metric declaration introduces:
+
+- a symmetric covariant rank-2 tensor
+- nondegeneracy requirement
+- induced raising/lowering maps
+- optional norm and trace operations
+
+### 8.2 Connection
+A connection introduces tensor-aware differentiation on declared bundles or spaces.
+
+TLS 0.2 reserves syntax for connections but does not fully define covariant derivative semantics. See Section 16 for the TLS-Calc roadmap.
+
+### 8.3 Basis
+A basis declaration binds a coordinate representation to a space.
+
+```tls
+basis e for V
+```
+
+A basis MAY be used to expose component arrays. Basis data SHALL NOT alter tensor identity.
+
+---
+
+## 9. Representation Model
+
+### 9.1 Coordinate Representation
+A tensor MAY have components relative to a basis.
+
+Example:
+
+```tls
+let v = components(e) [1,2,3]
+```
+
+### 9.2 Representation Safety
+Operations on component arrays are legal only when basis compatibility is established.
+
+### 9.3 Transformation Law
+Implementations SHALL preserve tensorial transformation laws when changing basis.
+
+---
+
+## 10. Validity Rules
+
+An expression is valid iff all of the following hold:
+
+1. every identifier is declared or bound
+2. every tensor slot has declared space compatibility
+3. every addition has identical operand types
+4. every contraction pairs compatible opposite-variance slots
+5. every raising/lowering references declared structure
+6. every symmetry projection references valid slot indices
+7. no operator introduces hidden non-tensorial dependence unless explicitly declared
+8. every concrete tensor value conforms to the dimension well-formedness rule (Section 6.11)
+9. every use of `@` matches one of the three canonical forms (Section 6.7)
+10. every `where` block contains only declarations, not persistent bindings
+
+---
+
+## 11. Error Classes
+
+TLS implementations SHOULD expose the following error classes:
+
+### 11.1 ParseError
+Invalid syntax.
+
+### 11.2 TypeError
+Operator applied to incompatible tensor types, or concrete value violates dimension well-formedness.
+
+### 11.3 VarianceError
+Illegal contraction or raise/lower mismatch.
+
+### 11.4 SpaceError
+Incompatible spaces used in one operation, or dimension mismatch between a concrete value and its declared space.
+
+### 11.5 StructureError
+Missing metric, pairing, basis, or connection.
+
+### 11.6 AmbiguityError
+An operation admits multiple incompatible interpretations. In particular, use of `@` on operands that do not match one of the three canonical forms (Section 6.7) SHALL raise this error.
+
+### 11.7 SymmetryError
+In strict mode, addition of tensors with incompatible symmetry annotations. See Section 6.12.1.
+
+### 11.8 PreconditionError
+A standard library operation was invoked on an operand that does not satisfy the operation's preconditions (e.g., `inv` on a degenerate tensor, `eigenvalues` on a non-endomorphism).
+
+---
+
+## 12. Ordinary Arithmetic Embedding
+
+TLS embeds ordinary arithmetic as a rank-0 tensor fragment.
+
+### 12.1 Numerals
+```tls
+1 : Tensor<>
+2 : Tensor<>
+```
+
+### 12.2 Scalar Addition
+```tls
+1 + 2
+```
+
+Interpretation:
+
+```tls
+Tensor<> + Tensor<> -> Tensor<>
+```
+
+### 12.3 Scalar Subtraction
+```tls
+5 - 3
+```
+
+Interpretation:
+
+```tls
+5 + (-1) * 3 -> Tensor<>
+```
+
+### 12.4 Scalar Multiplication
+```tls
+2 * 3
+```
+
+Interpretation:
+
+- rank-0 tensor product
+- equivalent to scalar multiplication in the coefficient ring
+
+### 12.5 Scalar Negation
+```tls
+-7
+```
+
+Interpretation:
+
+```tls
+(-1) * 7 -> Tensor<>
+```
+
+Thus ordinary arithmetic is a conservative sublanguage of TLS.
+
+---
+
+## 13. Standard Library
+
+TLS 0.2 provides the following built-in operations. Each operation specifies its preconditions; failure to satisfy a precondition SHALL raise a PreconditionError.
+
+### 13.1 Core Operations (TLS-Core)
+
+| Operation | Signature | Preconditions |
+|-----------|-----------|---------------|
+| `contract(T, i, j)` | Removes two slots, returns reduced tensor | Slots `i`,`j` have opposite variance over compatible spaces |
+| `raise(T, g)` | Returns tensor with one covariant slot raised | `g` is a declared nondegenerate metric compatible with the target slot |
+| `lower(T, g)` | Returns tensor with one contravariant slot lowered | `g` is a declared nondegenerate metric compatible with the target slot |
+| `sym(T, i, j)` | Projects to symmetric part in slots `i`,`j` | Slots `i`,`j` have same variance and same space |
+| `antisym(T, i, j)` | Projects to antisymmetric part in slots `i`,`j` | Slots `i`,`j` have same variance and same space |
+| `rank(T)` | Returns integer rank | None |
+| `type_of(T)` | Returns tensor type | None |
+| `spaces_of(T)` | Returns list of spaces | None |
+| `variances_of(T)` | Returns list of variances | None |
+| `is_scalar(T)` | Returns boolean | None |
+| `is_symmetric(T)` | Returns boolean | None |
+| `trace(T)` | Contracts the canonical pair of opposite-variance slots | `T` has exactly one contravariant and one covariant slot over the same space, OR explicit slot indices are provided |
+| `transpose(T)` | Swaps two slots of a rank-2 tensor | `T` is rank 2 |
+
+### 13.2 Structured Operations (TLS-Core, guarded)
+
+| Operation | Signature | Preconditions | Returns |
+|-----------|-----------|---------------|---------|
+| `det(T)` | `det : Tensor<V+,V-> -> Tensor<>` | `T` is rank-2 with one contravariant and one covariant slot over the same finite-dimensional space | Scalar |
+| `inv(T)` | `inv : Tensor<V+,V-> -> Tensor<V-,V+>` | Same as `det`, plus nondegeneracy (`det(T) != 0`) | Tensor with swapped variance |
+| `eigenvalues(T)` | `eigenvalues : Tensor<V+,V-> -> List<Tensor<>>` | `T` must admit an endomorphism interpretation over the same finite-dimensional space | Ordered list of scalars |
+
+### 13.3 Geometric Operations (TLS-Geom)
+
+| Operation | Signature | Preconditions | Returns |
+|-----------|-----------|---------------|---------|
+| `norm(v, g)` | `norm : (Tensor<V+>, Tensor<V-,V->) -> Tensor<>` | `v` is a vector, `g` is a declared nondegenerate symmetric metric over the same space | Scalar |
+
+---
+
+## 14. Sample Programs
+
+### 14.1 Scalar Arithmetic
+```tls
+ring R
+let x = 1
+let y = 2
+assert type_of(x + y) == Tensor<>
+```
+
+### 14.2 Vector and Covector Contraction
+```tls
+ring R
+space V over R dim 2
+let v = v(3,4)
+let w = cv(1,2)
+let s = w @ v
+```
+
+Expected type: `s : Tensor<>`
+
+### 14.3 Tensor Product
+```tls
+ring R
+space V over R dim 2
+let v = v(2,1)
+let w = cv(5,7)
+let A = v * w
+```
+
+Expected type: `A : Tensor<V+,V->`
+
+### 14.4 Metric Use
+```tls
+ring R
+space V over R dim 3
+metric g : Tensor<V-,V-> {sym(1,2), nondegenerate}
+let v = v(1,2,3)
+let omega = lower(v, g)
+```
+
+Expected type: `omega : Tensor<V->`
+
+### 14.5 Negation and Subtraction
+```tls
+ring R
+space V over R dim 2
+let a = v(3,4)
+let b = v(1,1)
+let c = a - b
+let d = -a
+```
+
+Expected types: `c : Tensor<V+>`, `d : Tensor<V+>`
+
+### 14.6 Where Clause
+```tls
+ring R
+let result = contract(T[a+, b-], v[b+]) where
+  space V over R dim 3
+  tensor T : Tensor<V+, V->
+  tensor v : Tensor<V+>
+```
+
+Expected type: `result : Tensor<V+>`
+
+### 14.7 Ambiguity Error on `@`
+```tls
+ring R
+space V over R dim 2
+tensor A : Tensor<V+, V->
+tensor B : Tensor<V+, V->
+# ILLEGAL: let C = A @ B
+# Correct:
+let C = contract(A[a+, b-], B[b+, c-])
+```
+
+### 14.8 Dimension Well-Formedness Error
+```tls
+ring R
+space V over R dim 3
+# ILLEGAL: let v = v(1,2)
+# Correct:
+let v = v(1,2,3)
+```
+
+### 14.9 Symmetry Propagation
+```tls
+ring R
+space V over R dim 3
+tensor A : Tensor<V-, V-> {sym(1,2)}
+tensor B : Tensor<V-, V-> {sym(1,2)}
+let C = A + B
+# C : Tensor<V-, V-> {sym(1,2)}
+
+tensor D : Tensor<V-, V-> {antisym(1,2)}
+# In strict mode, A + D is a SymmetryError
+# In relaxed mode, A + D : Tensor<V-, V-> (no symmetry)
+```
+
+---
+
+## 15. Conformance Tests
+
+This section defines normative conformance tests. A conforming TLS 0.2 implementation MUST produce the specified results for each test.
+
+### 15.1 TLS-Core Conformance
+
+#### Test C01: Scalar promotion
+```tls
+ring R
+let x = 42
+assert type_of(x) == Tensor<>
+```
+**Expected**: PASS.
+
+#### Test C02: Scalar arithmetic
+```tls
+ring R
+let x = 3
+let y = 4
+let z = x + y
+assert is_scalar(z)
+assert z == 7
+```
+**Expected**: PASS.
+
+#### Test C03: Scalar negation
+```tls
+ring R
+let x = 5
+let y = -x
+assert y == -5
+assert type_of(y) == Tensor<>
+```
+**Expected**: PASS.
+
+#### Test C04: Scalar subtraction
+```tls
+ring R
+let x = 10
+let y = 3
+let z = x - y
+assert z == 7
+```
+**Expected**: PASS.
+
+#### Test C05: Vector type
+```tls
+ring R
+space V over R dim 3
+let v = v(1,2,3)
+assert type_of(v) == Tensor<V+>
+assert rank(v) == 1
+```
+**Expected**: PASS.
+
+#### Test C06: Covector-vector contraction via `@`
+```tls
+ring R
+space V over R dim 2
+let w = cv(1,2)
+let v = v(3,4)
+let s = w @ v
+assert type_of(s) == Tensor<>
+assert s == 11
+```
+**Expected**: PASS. `s = 1*3 + 2*4 = 11`.
+
+#### Test C07: Tensor product type
+```tls
+ring R
+space V over R dim 2
+let u = v(1,0)
+let w = cv(0,1)
+let T = u * w
+assert type_of(T) == Tensor<V+, V->
+assert rank(T) == 2
+```
+**Expected**: PASS.
+
+#### Test C08: Mixed tensor @ vector
+```tls
+ring R
+space V over R dim 2
+tensor T : Tensor<V+, V->
+let T = m(1,0;0,2)
+let v = v(3,4)
+let w = T @ v
+assert type_of(w) == Tensor<V+>
+```
+**Expected**: PASS.
+
+#### Test C09: `@` on rank-2 @ rank-2 raises AmbiguityError
+```tls
+ring R
+space V over R dim 2
+tensor A : Tensor<V+, V->
+tensor B : Tensor<V+, V->
+let A = m(1,0;0,1)
+let B = m(2,0;0,2)
+let C = A @ B
+```
+**Expected**: AmbiguityError.
+
+#### Test C10: Dimension well-formedness violation
+```tls
+ring R
+space V over R dim 3
+let v = v(1,2)
+```
+**Expected**: TypeError or SpaceError.
+
+#### Test C11: Addition type mismatch
+```tls
+ring R
+space V over R dim 2
+space W over R dim 3
+let v = v(1,2)
+let w = v(1,2,3)
+let z = v + w
+```
+**Expected**: TypeError.
+
+#### Test C12: Explicit contraction
+```tls
+ring R
+space V over R dim 2
+tensor T : Tensor<V+, V->
+let T = m(1,2;3,4)
+assert trace(T) == 5
+```
+**Expected**: PASS. Trace = 1 + 4 = 5.
+
+#### Test C13: Symmetry preservation under addition
+```tls
+ring R
+space V over R dim 2
+tensor A : Tensor<V-, V-> {sym(1,2)}
+tensor B : Tensor<V-, V-> {sym(1,2)}
+let C = A + B
+assert is_symmetric(C)
+```
+**Expected**: PASS.
+
+#### Test C14: Symmetry destruction under mixed addition (strict mode)
+```tls
+ring R
+space V over R dim 2
+tensor A : Tensor<V-, V-> {sym(1,2)}
+tensor B : Tensor<V-, V-> {antisym(1,2)}
+let C = A + B
+```
+**Expected**: SymmetryError in strict mode.
+
+#### Test C15: Where clause scoping
+```tls
+ring R
+space V over R dim 2
+let s = contract(T[a+, b-], w[b+]) where
+  tensor T : Tensor<V+, V->
+  let T = m(1,0;0,1)
+  tensor w : Tensor<V+>
+  let w = v(5,6)
+assert type_of(s) == Tensor<V+>
+```
+**Expected**: PASS.
+
+#### Test C16: det of identity
+```tls
+ring R
+space V over R dim 2
+tensor I : Tensor<V+, V->
+let I = m(1,0;0,1)
+assert det(I) == 1
+```
+**Expected**: PASS.
+
+#### Test C17: inv type
+```tls
+ring R
+space V over R dim 2
+tensor T : Tensor<V+, V->
+let T = m(1,2;3,4)
+let S = inv(T)
+assert type_of(S) == Tensor<V-, V+>
+```
+**Expected**: PASS.
+
+#### Test C18: inv of degenerate matrix
+```tls
+ring R
+space V over R dim 2
+tensor T : Tensor<V+, V->
+let T = m(1,2;2,4)
+let S = inv(T)
+```
+**Expected**: PreconditionError.
+
+### 15.2 TLS-Geom Conformance
+
+#### Test G01: Lowering with metric
+```tls
+ring R
+space V over R dim 2
+metric g : Tensor<V-, V-> {sym(1,2), nondegenerate}
+let g = m(1,0;0,1)
+let v = v(3,4)
+let omega = lower(v, g)
+assert type_of(omega) == Tensor<V->
+```
+**Expected**: PASS.
+
+#### Test G02: Lowering without metric raises StructureError
+```tls
+ring R
+space V over R dim 2
+let v = v(3,4)
+let omega = lower(v, g)
+```
+**Expected**: StructureError.
+
+#### Test G03: Raise then lower is identity
+```tls
+ring R
+space V over R dim 2
+metric g : Tensor<V-, V-> {sym(1,2), nondegenerate}
+let g = m(1,0;0,1)
+let v = v(3,4)
+let omega = lower(v, g)
+let v2 = raise(omega, g)
+assert v2 == v
+```
+**Expected**: PASS.
+
+---
+
+## 16. Tensor Field Roadmap (TLS-Calc)
+
+This section describes planned syntax and semantics for tensor fields over manifolds. The constructs described here are **reserved but not yet normative**.
+
+### 16.1 Planned Declarations
+
+#### Manifold Declaration
+```tls
+manifold M dim 4
+```
+
+#### Bundle Declaration
+```tls
+bundle TM over M
+```
+
+#### Tensor Field Declaration (Option A)
+```tls
+tensorfield g : TensorField<M, TM-, TM->
+```
+
+#### Tensor Field Declaration (Option B)
+```tls
+tensor g : Field<M, Tensor<TM-, TM->>
+```
+
+Option A is more readable. Option B is more compositional.
+
+### 16.2 Semantic Distinction
+
+A **tensor** is a multilinear map at a single point.
+
+A **tensor field** is a smooth assignment of a tensor to each point of a manifold.
+
+This distinction is critical for:
+
+- **Covariant derivatives**: only meaningful for tensor fields.
+- **Lie derivatives**: require a vector field, not just a vector.
+- **Curvature**: a tensor field derived from a connection on a bundle.
+- **Integration**: requires tensor densities or forms over a manifold.
+
+### 16.3 Reserved Keywords
+
+The following keywords are reserved for TLS-Calc:
+
+- `field`
+- `manifold`
+- `bundle`
+- `tensorfield`
+
+---
+
+## 17. Compliance Levels
+
+### TLS-Core
+Required:
+
+- scalar promotion
+- tensor addition (with symmetry propagation per Section 6.12)
+- negation and subtraction (Section 6.13)
+- tensor product
+- explicit contraction via `contract(...)`
+- canonical contraction via `@` (Section 6.7) with AmbiguityError enforcement
+- dimension well-formedness checking (Section 6.11)
+- `where` clause (Section 5.7)
+- rank/type introspection
+- standard library: core operations and structured operations (Section 13.1, 13.2)
+- parser for typed tensor expressions with statement delimiters
+- all TLS-Core conformance tests (Section 15.1) MUST pass
+
+### TLS-Geom
+Adds:
+
+- metrics
+- raising/lowering
+- symmetry annotations
+- basis declarations
+- geometric standard library operations (Section 13.3)
+- all TLS-Geom conformance tests (Section 15.2) MUST pass
+
+### TLS-Calc
+Adds:
+
+- differential operators
+- connections
+- tensor fields over manifolds (Section 16)
+- covariant differentiation
+- Lie derivatives
+
+---
+
+## 18. EBNF Grammar
+
+```ebnf
+(* TLS 0.2 Formal Grammar *)
+
+program          = { (declaration | statement) terminator } ;
+terminator       = NEWLINE | ";" ;
+
+declaration      = ring_decl
+                 | space_decl
+                 | tensor_decl
+                 | metric_decl
+                 | connection_decl
+                 | type_decl
+                 | basis_decl ;
+
+statement        = let_stmt | assert_stmt | expr ;
+
+(* --- Declarations --- *)
+
+ring_decl        = "ring" identifier ;
+space_decl       = "space" identifier "over" identifier [ "dim" integer ] ;
+tensor_decl      = "tensor" identifier ":" tensor_type ;
+metric_decl      = "metric" identifier ":" tensor_type ;
+connection_decl  = "connection" identifier "on" identifier "compatible" identifier ;
+type_decl        = "type" identifier "=" tensor_type ;
+basis_decl       = "basis" identifier "for" identifier ;
+
+(* --- Statements --- *)
+
+let_stmt         = "let" identifier "=" expr ;
+assert_stmt      = "assert" expr ;
+
+(* --- Expressions --- *)
+
+expr             = where_expr ;
+where_expr       = additive_expr [ "where" NEWLINE INDENT { declaration terminator } DEDENT ] ;
+additive_expr    = multiplicative_expr { ("+" | "-") multiplicative_expr } ;
+multiplicative_expr = unary_expr { ("*" | "@") unary_expr } ;
+unary_expr       = [ "-" ] primary_expr ;
+primary_expr     = literal
+                 | identifier
+                 | indexed_expr
+                 | function_call
+                 | "(" expr ")" ;
+
+indexed_expr     = identifier "[" index_slot { "," index_slot } "]" ;
+index_slot       = identifier ("+" | "-") ;
+
+function_call    = identifier "(" [ expr { "," expr } ] ")" ;
+
+(* --- Literals --- *)
+
+literal          = number
+                 | vector_literal
+                 | covector_literal
+                 | matrix_literal ;
+
+number           = integer | decimal ;
+integer          = digit { digit } ;
+decimal          = digit { digit } "." digit { digit } ;
+vector_literal   = "v" "(" number { "," number } ")" ;
+covector_literal = "cv" "(" number { "," number } ")" ;
+matrix_literal   = "m" "(" row { ";" row } ")" ;
+row              = number { "," number } ;
+
+(* --- Types --- *)
+
+tensor_type      = "Tensor" "<" [ slot_type { "," slot_type } ] ">" [ structure_block ] ;
+slot_type        = identifier ("+" | "-") ;
+structure_block  = "{" annotation { "," annotation } "}" ;
+annotation       = identifier [ "(" integer { "," integer } ")" ] ;
+
+(* --- Lexical --- *)
+
+identifier       = ( letter | "_" ) { letter | digit | "_" } ;
+letter           = "A" | ... | "Z" | "a" | ... | "z" ;
+digit            = "0" | ... | "9" ;
+
+NEWLINE          = (* platform newline character(s) *) ;
+INDENT           = (* increase in indentation level *) ;
+DEDENT           = (* decrease in indentation level *) ;
+```
+
+**Notes on delimiters:**
+
+- Statements and declarations are terminated by NEWLINE.
+- The `;` character MAY be used to chain multiple statements on a single line.
+- The `where` clause uses indentation-sensitive parsing.
+- Implementations MAY accept `{` ... `}` as an alternative to INDENT/DEDENT for `where` blocks.
+
+---
+
+## 19. Formalization Direction
+
+A future version SHOULD define:
+
+- denotational semantics
+- operational semantics for evaluation
+- canonical type equivalence rules
+- rewrite rules for tensor identities
+- proof obligations for invariant-preserving transformations
+- formal symmetry inference algorithms
+- TLS-Calc normative semantics (tensor fields, connections, curvature)
+
+---
+
+## 20. Foundational Summary
+
+TLS defines a tensor-native mathematical language where:
+
+- scalars are rank-0 tensors
+- ordinary arithmetic is a sublanguage
+- tensor interaction is explicit
+- type safety is structural
+- indices are typed and variance-aware
+- geometry requires declared structure
+- representation does not replace identity
+- dimension is a property of spaces, not tensor types
+- symmetry propagation is governed by explicit rules
+- convenience operators (`@`, `-`) have precise, restricted semantics
+- the coefficient domain is declared as a `ring`, with `field` reserved for tensor fields
+
+This makes TLS suitable as a formal foundation for a generalized tensor-standard mathematics system.
+    </script>
+
+    <!-- Spec tab -->
+    <div class="tab-panel" id="tab-spec">
+      <div class="spec-container">
+        <div class="spec-meta">
+          <span class="spec-version">TLS 0.2</span>
+          <span class="spec-status">Formal specification for a tensor-native symbolic mathematics language</span>
+        </div>
+        <div class="spec-controls">
+          <button class="spec-toggle-btn" id="specExpandAll">Expand All</button>
+          <button class="spec-toggle-btn" id="specCollapseAll">Collapse All</button>
+        </div>
+        <div id="specSections"></div>
+      </div>
+    </div>
+
+    <!-- REPL tab -->
+    <div class="tab-panel" id="tab-repl">
+      <div class="repl-container">
+        <div>
+          <div class="repl-editor-wrap">
+            <div class="repl-editor">
+              <div class="repl-line-numbers" id="replLineNumbers">
+                <span class="line-num">1</span>
+              </div>
+              <textarea class="repl-textarea" id="replTextarea"
+                placeholder="Type declarations and expressions...&#10;&#10;ring R&#10;space V over R dim 3&#10;let x = v(1,2,3)&#10;let y = v(4,5,6)&#10;x + y&#10;norm(x)&#10;&#10;Or use where clauses:&#10;a + b where let a = v(1,0); let b = v(0,1)"
+                spellcheck="false"></textarea>
+            </div>
+            <div class="repl-buttons">
+              <button class="repl-btn repl-btn-primary" id="replRun">Run</button>
+              <button class="repl-btn" id="replClear">Clear</button>
+              <button class="repl-btn" id="replClearEnv">Clear Env</button>
+            </div>
+          </div>
+          <div class="repl-output" id="replOutput">
+            <div style="color: var(--text-dim); font-style: italic;">Output will appear here after running.</div>
+          </div>
+        </div>
+        <div class="env-panel" id="envPanel">
+          <div class="card">
+            <div class="card-header">
+              <span class="icon">&#x25CB;</span>
+              <h3>Environment</h3>
+            </div>
+            <div class="card-body" id="envBody">
+              <div class="env-empty">No declarations yet.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// =====================================================================
+//  Tensor Standard Math — Layer 2 Engine
+// =====================================================================
+
+// ─── Error types ───
+function TLSError(type, message, pos) {
+  this.type = type;
+  this.message = message;
+  this.pos = pos !== undefined ? pos : -1;
+}
+TLSError.prototype.toString = function() {
+  var s = this.type + ': ' + this.message;
+  if (this.pos >= 0) s += ' (at position ' + this.pos + ')';
+  return s;
+};
+
+function ParseError(msg, pos) { return new TLSError('ParseError', msg, pos); }
+function TypeError_(msg, pos) { return new TLSError('TypeError', msg, pos); }
+function VarianceError(msg, pos) { return new TLSError('VarianceError', msg, pos); }
+function DimensionError(msg, pos) { return new TLSError('DimensionError', msg, pos); }
+
+// ─── Tensor constructors ───
+function scalar(n) {
+  return {
+    kind: 'scalar', rank: 0, spaces: [], variances: [],
+    value: n,
+    display: String(Number.isInteger(n) ? n : +n.toFixed(6)),
+    explanation: 'Scalar ' + n + ' is interpreted as a rank-0 tensor.'
+  };
+}
+
+function vector(xs, space) {
+  space = space || 'V';
+  return {
+    kind: 'vector', rank: 1, spaces: [space], variances: ['+'],
+    value: xs,
+    display: '[' + xs.map(function(x){ return Number.isInteger(x) ? x : +x.toFixed(6); }).join(', ') + ']^' + space,
+    explanation: 'Vector in ' + space + ' with one contravariant index.'
+  };
+}
+
+function covector(xs, space) {
+  space = space || 'V*';
+  return {
+    kind: 'covector', rank: 1, spaces: [space], variances: ['-'],
+    value: xs,
+    display: '[' + xs.map(function(x){ return Number.isInteger(x) ? x : +x.toFixed(6); }).join(', ') + ']_' + space,
+    explanation: 'Covector in ' + space + ' with one covariant index.'
+  };
+}
+
+function tensor2(xs, spaces, variances) {
+  spaces = spaces || ['V', 'V*'];
+  variances = variances || ['+', '-'];
+  var varLabel = variances.map(function(v, i) { return v + ':' + spaces[i]; }).join(', ');
+  // Symmetry detection for square matrices
+  var sym = null;
+  var isSquare = xs.length === xs[0].length;
+  if (isSquare) {
+    var isSym = true, isAntiSym = true;
+    for (var i = 0; i < xs.length && (isSym || isAntiSym); i++) {
+      for (var j = 0; j < xs[i].length && (isSym || isAntiSym); j++) {
+        if (xs[i][j] !== xs[j][i]) isSym = false;
+        if (xs[i][j] !== -xs[j][i]) isAntiSym = false;
+      }
+    }
+    if (isSym) sym = 'sym';
+    else if (isAntiSym) sym = 'antisym';
+  }
+  return {
+    kind: 'tensor2', rank: 2, spaces: spaces, variances: variances,
+    value: xs, symmetry: sym,
+    display: '[[' + xs.map(function(r){ return r.map(function(x){ return Number.isInteger(x) ? x : +x.toFixed(6); }).join(', '); }).join('], [') + ']]',
+    explanation: 'Rank-2 tensor [' + varLabel + '].'
+  };
+}
+
+function tensor3(slabs, spaces, variances) {
+  spaces = spaces || ['V', 'V*', 'V*'];
+  variances = variances || ['+', '-', '-'];
+  var varLabel = variances.map(function(v, i) { return v + ':' + spaces[i]; }).join(', ');
+  var fmt = function(x) { return Number.isInteger(x) ? x : +x.toFixed(6); };
+  // Build component display: show non-zero components with variance-aware notation
+  var nSlabs = slabs.length, nRows = slabs[0].length, nCols = slabs[0][0].length;
+  var parts = [];
+  for (var a = 0; a < nSlabs; a++) {
+    for (var i = 0; i < nRows; i++) {
+      for (var j = 0; j < nCols; j++) {
+        var v = slabs[a][i][j];
+        if (v !== 0) {
+          // Use T^a_{ij} notation for mixed tensors, T_{aij} for all-covariant, etc.
+          var label = variances[0] === '+' ? '^' + a + '_{' + i + j + '}' : '_{' + a + i + j + '}';
+          parts.push('T' + label + '=' + fmt(v));
+        }
+      }
+    }
+  }
+  var disp = parts.length > 0 ? '{' + parts.join(', ') + '}' : '{0}';
+  return {
+    kind: 'tensor3', rank: 3, spaces: spaces, variances: variances,
+    value: slabs,
+    display: disp,
+    explanation: 'Rank-3 tensor [' + varLabel + '] with ' + nSlabs + '\u00d7' + nRows + '\u00d7' + nCols + ' components.'
+  };
+}
+
+// ─── Tensor type label ───
+function tensorTypeString(t) {
+  if (t.rank === 0) return 'T[] = scalar';
+  var idx = t.variances.map(function(v, i) {
+    return String.fromCharCode(97 + i) + v + ':' + t.spaces[i];
+  }).join(', ');
+  var suffix = '';
+  if (t.symmetry) suffix = ', ' + t.symmetry;
+  return 'T[' + idx + '] (rank ' + t.rank + suffix + ')';
+}
+
+// ─── Operations ───
+function addTensors(a, b, pos) {
+  if (a.kind !== b.kind || a.rank !== b.rank)
+    throw TypeError_('Addition requires identical tensor type. Got ' + a.kind + ' and ' + b.kind + '.', pos);
+  if (a.kind === 'scalar') return scalar(a.value + b.value);
+  if (a.kind === 'vector') {
+    if (a.value.length !== b.value.length) throw DimensionError('Vector addition requires equal dimension (' + a.value.length + ' vs ' + b.value.length + ').', pos);
+    if (a.spaces[0] !== b.spaces[0] && a.spaces[0] !== 'V' && b.spaces[0] !== 'V')
+      throw new TLSError('SpaceError', 'Cannot add vectors from different spaces (' + a.spaces[0] + ' vs ' + b.spaces[0] + ').', pos);
+    return vector(a.value.map(function(x, i){ return x + b.value[i]; }), a.spaces[0]);
+  }
+  if (a.kind === 'covector') {
+    if (a.value.length !== b.value.length) throw DimensionError('Covector addition requires equal dimension.', pos);
+    if (a.spaces[0] !== b.spaces[0] && a.spaces[0] !== 'V*' && b.spaces[0] !== 'V*')
+      throw new TLSError('SpaceError', 'Cannot add covectors from different spaces (' + a.spaces[0] + ' vs ' + b.spaces[0] + ').', pos);
+    return covector(a.value.map(function(x, i){ return x + b.value[i]; }), a.spaces[0]);
+  }
+  var am = a.value, bm = b.value;
+  if (am.length !== bm.length || am[0].length !== bm[0].length)
+    throw DimensionError('Rank-2 tensor addition requires equal shape.', pos);
+  var result = tensor2(am.map(function(r, i){ return r.map(function(x, j){ return x + bm[i][j]; }); }), a.spaces, a.variances);
+  // Symmetry propagation for tensor2 addition
+  if (a.symmetry && b.symmetry) {
+    if (a.symmetry === b.symmetry) {
+      result.symmetry = a.symmetry;
+    } else {
+      result.symmetry = null;
+      result.symmetryWarning = 'Warning: adding symmetric + antisymmetric tensors drops symmetry annotation (TLS 6.12.1).';
+    }
+  } else if (a.symmetry && !b.symmetry) {
+    result.symmetry = null;
+  } else if (!a.symmetry && b.symmetry) {
+    result.symmetry = null;
+  }
+  return result;
+}
+
+function scaleTensor(t, s) {
+  if (t.kind === 'scalar') return scalar(t.value * s);
+  if (t.kind === 'vector') return vector(t.value.map(function(x){ return x * s; }), t.spaces[0]);
+  if (t.kind === 'covector') return covector(t.value.map(function(x){ return x * s; }), t.spaces[0]);
+  if (t.kind === 'tensor3') return tensor3(t.value.map(function(slab){ return slab.map(function(r){ return r.map(function(x){ return x * s; }); }); }), t.spaces, t.variances);
+  return tensor2(t.value.map(function(r){ return r.map(function(x){ return x * s; }); }), t.spaces, t.variances);
+}
+
+function negateTensor(t) {
+  return scaleTensor(t, -1);
+}
+
+function tensorProduct(a, b, pos) {
+  if (a.kind === 'scalar') return scaleTensor(b, a.value);
+  if (b.kind === 'scalar') return scaleTensor(a, b.value);
+  if (a.kind === 'vector' && b.kind === 'covector') {
+    return tensor2(a.value.map(function(x){ return b.value.map(function(y){ return x * y; }); }), [a.spaces[0], b.spaces[0]], ['+', '-']);
+  }
+  if (a.kind === 'covector' && b.kind === 'vector') {
+    return tensor2(a.value.map(function(x){ return b.value.map(function(y){ return x * y; }); }), [a.spaces[0], b.spaces[0]], ['-', '+']);
+  }
+  throw TypeError_('Tensor product is implemented for scalar*anything and vector\u2297covector.', pos);
+}
+
+function contract(a, b, pos) {
+  if (a.kind === 'covector' && b.kind === 'vector') {
+    if (a.value.length !== b.value.length) throw DimensionError('Contraction requires matching dimension.', pos);
+    // Space compatibility check: covector space should be dual of vector space
+    var cvSpace = a.spaces[0], vSpace = b.spaces[0];
+    var cvBase = cvSpace.replace(/\*$/, ''), vBase = vSpace;
+    if (cvBase !== vBase && cvBase !== 'V' && vBase !== 'V')
+      throw new TLSError('SpaceError', 'Cannot contract covector in ' + cvSpace + ' with vector in ' + vSpace + ' (spaces do not match).', pos);
+    return scalar(a.value.reduce(function(sum, x, i){ return sum + x * b.value[i]; }, 0));
+  }
+  if (a.kind === 'tensor2' && b.kind === 'vector') {
+    if (a.value[0].length !== b.value.length) throw DimensionError('Tensor-vector contraction requires matching dimensions.', pos);
+    // Space compatibility check for the contracted index
+    var tSpace = a.spaces[1], vSpace = b.spaces[0];
+    var tBase = tSpace.replace(/\*$/, ''), vBase = vSpace;
+    if (tBase !== vBase && tBase !== 'V' && vBase !== 'V')
+      throw new TLSError('SpaceError', 'Cannot contract tensor slot in ' + tSpace + ' with vector in ' + vSpace + ' (spaces do not match).', pos);
+    return vector(a.value.map(function(row){ return row.reduce(function(sum, x, i){ return sum + x * b.value[i]; }, 0); }), a.spaces[0]);
+  }
+  if (a.kind === 'covector' && b.kind === 'tensor2') {
+    if (a.value.length !== b.value.length) throw DimensionError('Covector-tensor contraction requires matching dimensions.', pos);
+    var cvSpace = a.spaces[0], tSpace = b.spaces[0];
+    var cvBase = cvSpace.replace(/\*$/, ''), tBase = tSpace.replace(/\*$/, '');
+    if (cvBase !== tBase && cvBase !== 'V' && tBase !== 'V')
+      throw new TLSError('SpaceError', 'Cannot contract covector in ' + cvSpace + ' with tensor slot in ' + tSpace + '.', pos);
+    var cols = b.value[0].length;
+    var result = [];
+    for (var j = 0; j < cols; j++) {
+      var sum = 0;
+      for (var i = 0; i < a.value.length; i++) sum += a.value[i] * b.value[i][j];
+      result.push(sum);
+    }
+    return covector(result, b.spaces[1]);
+  }
+  if (a.kind === 'tensor2' && b.kind === 'tensor2') {
+    // Matrix multiplication: contract last slot of a with first slot of b
+    var aCols = a.value[0].length, bRows = b.value.length;
+    if (aCols !== bRows) throw DimensionError('Matrix multiplication requires matching inner dimensions (' + aCols + ' vs ' + bRows + ').', pos);
+    var aSpace = a.spaces[1], bSpace = b.spaces[0];
+    var aBase = aSpace.replace(/\*$/, ''), bBase = bSpace.replace(/\*$/, '');
+    if (aBase !== bBase && aBase !== 'V' && bBase !== 'V')
+      throw new TLSError('SpaceError', 'Cannot contract tensor slot in ' + aSpace + ' with tensor slot in ' + bSpace + '.', pos);
+    var rows = a.value.length, cols = b.value[0].length;
+    var result = [];
+    for (var i = 0; i < rows; i++) {
+      var row = [];
+      for (var j = 0; j < cols; j++) {
+        var sum = 0;
+        for (var k = 0; k < aCols; k++) sum += a.value[i][k] * b.value[k][j];
+        row.push(sum);
+      }
+      result.push(row);
+    }
+    return tensor2(result, [a.spaces[0], b.spaces[1]], [a.variances[0], b.variances[1]]);
+  }
+  throw TypeError_('Contraction (@) is implemented for covector\u00b7vector, rank2\u00b7vector, covector\u00b7rank2, and rank2\u00b7rank2.', pos);
+}
+
+// ─── Standard Library Functions ───
+function fnTrace(t, pos) {
+  if (t.kind !== 'tensor2') throw TypeError_('trace() requires a rank-2 tensor, got ' + t.kind + '.', pos);
+  var rows = t.value.length, cols = t.value[0].length;
+  if (rows !== cols) throw DimensionError('trace() requires a square matrix (' + rows + 'x' + cols + ' is not square).', pos);
+  var sum = 0;
+  for (var i = 0; i < rows; i++) sum += t.value[i][i];
+  return scalar(sum);
+}
+
+function fnTranspose(t, pos) {
+  if (t.kind !== 'tensor2') throw TypeError_('transpose() requires a rank-2 tensor, got ' + t.kind + '.', pos);
+  var rows = t.value.length, cols = t.value[0].length;
+  var result = [];
+  for (var j = 0; j < cols; j++) {
+    var row = [];
+    for (var i = 0; i < rows; i++) row.push(t.value[i][j]);
+    result.push(row);
+  }
+  var newSpaces = [t.spaces[1], t.spaces[0]];
+  var newVar = [t.variances[1], t.variances[0]];
+  return tensor2(result, newSpaces, newVar);
+}
+
+function fnDet(t, pos) {
+  if (t.kind !== 'tensor2') throw TypeError_('det() requires a rank-2 tensor, got ' + t.kind + '.', pos);
+  var m = t.value, n = m.length;
+  if (n !== m[0].length) throw DimensionError('det() requires a square matrix.', pos);
+  if (n === 1) return scalar(m[0][0]);
+  if (n === 2) return scalar(m[0][0] * m[1][1] - m[0][1] * m[1][0]);
+  if (n === 3) {
+    return scalar(
+      m[0][0] * (m[1][1]*m[2][2] - m[1][2]*m[2][1]) -
+      m[0][1] * (m[1][0]*m[2][2] - m[1][2]*m[2][0]) +
+      m[0][2] * (m[1][0]*m[2][1] - m[1][1]*m[2][0])
+    );
+  }
+  throw DimensionError('det() is implemented for up to 3x3 matrices (got ' + n + 'x' + n + ').', pos);
+}
+
+function fnInv(t, pos) {
+  if (t.kind !== 'tensor2') throw TypeError_('inv() requires a rank-2 tensor, got ' + t.kind + '.', pos);
+  var m = t.value, n = m.length;
+  if (n !== m[0].length) throw DimensionError('inv() requires a square matrix.', pos);
+  var d;
+  if (n === 1) {
+    if (m[0][0] === 0) throw TypeError_('inv(): matrix is singular (determinant is 0).', pos);
+    return tensor2([[1/m[0][0]]], [t.spaces[1], t.spaces[0]], [t.variances[1], t.variances[0]]);
+  }
+  if (n === 2) {
+    d = m[0][0]*m[1][1] - m[0][1]*m[1][0];
+    if (d === 0) throw TypeError_('inv(): matrix is singular (determinant is 0).', pos);
+    return tensor2([
+      [ m[1][1]/d, -m[0][1]/d],
+      [-m[1][0]/d,  m[0][0]/d]
+    ], [t.spaces[1], t.spaces[0]], [t.variances[1], t.variances[0]]);
+  }
+  if (n === 3) {
+    d = m[0][0]*(m[1][1]*m[2][2]-m[1][2]*m[2][1])
+      - m[0][1]*(m[1][0]*m[2][2]-m[1][2]*m[2][0])
+      + m[0][2]*(m[1][0]*m[2][1]-m[1][1]*m[2][0]);
+    if (d === 0) throw TypeError_('inv(): matrix is singular (determinant is 0).', pos);
+    var cofactors = [
+      [ (m[1][1]*m[2][2]-m[1][2]*m[2][1])/d, -(m[1][0]*m[2][2]-m[1][2]*m[2][0])/d,  (m[1][0]*m[2][1]-m[1][1]*m[2][0])/d],
+      [-(m[0][1]*m[2][2]-m[0][2]*m[2][1])/d,  (m[0][0]*m[2][2]-m[0][2]*m[2][0])/d, -(m[0][0]*m[2][1]-m[0][1]*m[2][0])/d],
+      [ (m[0][1]*m[1][2]-m[0][2]*m[1][1])/d, -(m[0][0]*m[1][2]-m[0][2]*m[1][0])/d,  (m[0][0]*m[1][1]-m[0][1]*m[1][0])/d]
+    ];
+    return tensor2(cofactors, [t.spaces[1], t.spaces[0]], [t.variances[1], t.variances[0]]);
+  }
+  throw DimensionError('inv() is implemented for up to 3x3 matrices (got ' + n + 'x' + n + ').', pos);
+}
+
+function fnNorm(t, pos) {
+  if (t.kind !== 'vector' && t.kind !== 'covector')
+    throw TypeError_('norm() requires a vector or covector, got ' + t.kind + '.', pos);
+  var sumSq = t.value.reduce(function(s, x){ return s + x*x; }, 0);
+  return scalar(Math.sqrt(sumSq));
+}
+
+function fnIdentity(t, pos) {
+  if (t.kind !== 'scalar') throw TypeError_('identity() requires a scalar dimension argument, got ' + t.kind + '.', pos);
+  var n = t.value;
+  if (!Number.isInteger(n) || n < 1 || n > 10) throw DimensionError('identity() requires a positive integer 1-10, got ' + n + '.', pos);
+  var rows = [];
+  for (var i = 0; i < n; i++) {
+    var row = [];
+    for (var j = 0; j < n; j++) row.push(i === j ? 1 : 0);
+    rows.push(row);
+  }
+  return tensor2(rows, ['V', 'V*'], ['+', '-']);
+}
+
+function fnLower(v, g, pos) {
+  if (v.kind !== 'vector') throw TypeError_('lower() requires a vector (contravariant) as first argument, got ' + v.kind + '.', pos);
+  if (g.kind !== 'tensor2') throw TypeError_('lower() requires a rank-2 tensor (metric) as second argument, got ' + g.kind + '.', pos);
+  var n = v.value.length;
+  var rows = g.value.length, cols = g.value[0].length;
+  if (rows !== cols) throw DimensionError('lower(): metric must be square (' + rows + 'x' + cols + ').', pos);
+  if (n !== cols) throw DimensionError('lower(): vector dimension ' + n + ' does not match metric dimension ' + cols + '.', pos);
+  var result = [];
+  for (var i = 0; i < rows; i++) {
+    var sum = 0;
+    for (var j = 0; j < cols; j++) sum += g.value[i][j] * v.value[j];
+    result.push(sum);
+  }
+  return covector(result, v.spaces[0] + '*');
+}
+
+function fnRaise(w, g, pos) {
+  if (w.kind !== 'covector') throw TypeError_('raise() requires a covector (covariant) as first argument, got ' + w.kind + '.', pos);
+  if (g.kind !== 'tensor2') throw TypeError_('raise() requires a rank-2 tensor (metric) as second argument, got ' + g.kind + '.', pos);
+  var n = w.value.length;
+  var rows = g.value.length, cols = g.value[0].length;
+  if (rows !== cols) throw DimensionError('raise(): metric must be square (' + rows + 'x' + cols + ').', pos);
+  if (n !== cols) throw DimensionError('raise(): covector dimension ' + n + ' does not match metric dimension ' + cols + '.', pos);
+  // Compute inverse of g
+  var gInv = fnInv(g, pos);
+  // Multiply g^{-1} * w
+  var result = [];
+  for (var i = 0; i < rows; i++) {
+    var sum = 0;
+    for (var j = 0; j < cols; j++) sum += gInv.value[i][j] * w.value[j];
+    result.push(sum);
+  }
+  // Derive the vector space name from the covector space (strip trailing *)
+  var space = w.spaces[0];
+  if (space.slice(-1) === '*') space = space.slice(0, -1);
+  return vector(result, space);
+}
+
+function fnEigenvalues(t, pos) {
+  if (t.kind !== 'tensor2') throw TypeError_('eigenvalues() requires a rank-2 tensor, got ' + t.kind + '.', pos);
+  var m = t.value, n = m.length;
+  if (n !== m[0].length) throw DimensionError('eigenvalues() requires a square matrix (' + n + 'x' + m[0].length + ' is not square).', pos);
+  var vals;
+  if (n === 1) {
+    vals = [m[0][0]];
+  } else if (n === 2) {
+    // characteristic polynomial: lambda^2 - trace*lambda + det = 0
+    var tr = m[0][0] + m[1][1];
+    var det = m[0][0] * m[1][1] - m[0][1] * m[1][0];
+    var disc = tr * tr - 4 * det;
+    if (disc < 0) throw TypeError_('eigenvalues(): complex eigenvalues not supported (discriminant = ' + disc + ').', pos);
+    var sqrtDisc = Math.sqrt(disc);
+    vals = [(tr + sqrtDisc) / 2, (tr - sqrtDisc) / 2];
+  } else if (n === 3) {
+    throw TypeError_('eigenvalues() for 3x3 not yet implemented.', pos);
+  } else {
+    throw DimensionError('eigenvalues() is implemented for up to 2x2 matrices (got ' + n + 'x' + n + ').', pos);
+  }
+  return {
+    kind: 'scalar', rank: 0, spaces: [], variances: [],
+    value: vals,
+    display: 'eigenvalues(' + vals.map(function(v){ return Number.isInteger(v) ? v : +v.toFixed(6); }).join(', ') + ')',
+    explanation: 'Eigenvalues of the endomorphism.'
+  };
+}
+
+function fnSym(t, pos) {
+  if (t.kind !== 'tensor2') throw TypeError_('sym() requires a rank-2 tensor, got ' + t.kind + '.', pos);
+  var m = t.value, n = m.length;
+  if (n !== m[0].length) throw DimensionError('sym() requires a square matrix (' + n + 'x' + m[0].length + ' is not square).', pos);
+  var result = [];
+  for (var i = 0; i < n; i++) {
+    var row = [];
+    for (var j = 0; j < n; j++) {
+      row.push((m[i][j] + m[j][i]) / 2);
+    }
+    result.push(row);
+  }
+  var out = tensor2(result, t.spaces, t.variances);
+  out.symmetry = 'sym';
+  return out;
+}
+
+function fnAntisym(t, pos) {
+  if (t.kind !== 'tensor2') throw TypeError_('antisym() requires a rank-2 tensor, got ' + t.kind + '.', pos);
+  var m = t.value, n = m.length;
+  if (n !== m[0].length) throw DimensionError('antisym() requires a square matrix (' + n + 'x' + m[0].length + ' is not square).', pos);
+  var result = [];
+  for (var i = 0; i < n; i++) {
+    var row = [];
+    for (var j = 0; j < n; j++) {
+      row.push((m[i][j] - m[j][i]) / 2);
+    }
+    result.push(row);
+  }
+  var out = tensor2(result, t.spaces, t.variances);
+  out.symmetry = 'antisym';
+  return out;
+}
+
+function fnSelfContract(t, pos) {
+  if (t.kind !== 'tensor2') throw TypeError_('contract() requires a rank-2 tensor for self-contraction, got ' + t.kind + '.', pos);
+  return fnTrace(t, pos);
+}
+
+// ─── GR: Christoffel symbols ───
+// christoffel(g, dg) where g is rank-2 metric, dg is rank-3 (dg[k][i][j] = ∂_k g_ij)
+// Returns Γ^l_ij = (1/2) g^{lk} (∂_i g_{jk} + ∂_j g_{ik} - ∂_k g_{ij})
+function fnChristoffel(g, dg, pos) {
+  if (g.kind !== 'tensor2') throw TypeError_('christoffel() first argument must be a rank-2 metric tensor, got ' + g.kind + '.', pos);
+  if (dg.kind !== 'tensor3') throw TypeError_('christoffel() second argument must be a rank-3 tensor (metric derivatives), got ' + dg.kind + '.', pos);
+  var n = g.value.length;
+  if (n !== g.value[0].length) throw DimensionError('christoffel() requires a square metric.', pos);
+  if (dg.value.length !== n || dg.value[0].length !== n || dg.value[0][0].length !== n)
+    throw DimensionError('christoffel() metric derivative dimensions must match metric (' + n + '\u00d7' + n + '\u00d7' + n + ').', pos);
+  // Compute g^{-1}
+  var ginv = fnInv(g, pos);
+  var result = [];
+  for (var l = 0; l < n; l++) {
+    var slab = [];
+    for (var i = 0; i < n; i++) {
+      var row = [];
+      for (var j = 0; j < n; j++) {
+        var sum = 0;
+        for (var k = 0; k < n; k++) {
+          // Γ^l_ij = (1/2) g^{lk} (∂_i g_{jk} + ∂_j g_{ik} - ∂_k g_{ij})
+          sum += ginv.value[l][k] * (dg.value[i][j][k] + dg.value[j][i][k] - dg.value[k][i][j]);
+        }
+        row.push(0.5 * sum);
+      }
+      slab.push(row);
+    }
+    result.push(slab);
+  }
+  var sp = g.spaces[0] || 'V';
+  return tensor3(result, [sp, sp + '*', sp + '*'], ['+', '-', '-']);
+}
+
+// ─── GR: Riemann curvature tensor ───
+// riemann(g, dg, ddg) where ddg is rank-3 with n*n slabs: ddg[m*n+p][i][j] = ∂_m ∂_p g_ij
+// Returns a curvature result object with Riemann components, Ricci tensor, and scalar curvature.
+function fnRiemann(g, dg, ddg, pos) {
+  if (g.kind !== 'tensor2') throw TypeError_('riemann() first argument must be a rank-2 metric tensor.', pos);
+  if (dg.kind !== 'tensor3') throw TypeError_('riemann() second argument must be a rank-3 tensor (first derivatives).', pos);
+  if (ddg.kind !== 'tensor3') throw TypeError_('riemann() third argument must be a rank-3 tensor (second derivatives, n\u00b2 slabs).', pos);
+  var n = g.value.length;
+  if (n !== g.value[0].length) throw DimensionError('riemann() requires a square metric.', pos);
+  if (ddg.value.length !== n * n)
+    throw DimensionError('riemann() third argument must have ' + (n*n) + ' slabs for ' + n + 'D metric (got ' + ddg.value.length + '). Pack as \u2202_m\u2202_p g_ij with slab index m*n+p.', pos);
+
+  // Compute Christoffel symbols
+  var gamma = fnChristoffel(g, dg, pos);
+  var G = gamma.value; // G[l][i][j] = Γ^l_ij
+
+  // Unpack ddg into 4D: ddg_full[m][p][i][j] = ∂_m ∂_p g_ij
+  var ddg_full = [];
+  for (var m = 0; m < n; m++) {
+    var layer = [];
+    for (var p = 0; p < n; p++) {
+      layer.push(ddg.value[m * n + p]);
+    }
+    ddg_full.push(layer);
+  }
+
+  // Compute Christoffel derivatives: ∂_c Γ^a_ij from metric data
+  // Γ^a_ij = (1/2) g^{ak} (∂_i g_{jk} + ∂_j g_{ik} - ∂_k g_{ij})
+  // ∂_c Γ^a_ij = (1/2) [∂_c g^{ak}](...) + (1/2) g^{ak} (∂_c∂_i g_{jk} + ∂_c∂_j g_{ik} - ∂_c∂_k g_{ij})
+  // where ∂_c g^{ak} = -g^{am} g^{kn} ∂_c g_{mn}
+  var ginv = fnInv(g, pos).value;
+
+  // ∂_c g^{ab} = -g^{am} g^{bn} ∂_c g_{mn}
+  var dginv = []; // dginv[c][a][b]
+  for (var c = 0; c < n; c++) {
+    var slab = [];
+    for (var a = 0; a < n; a++) {
+      var row = [];
+      for (var b = 0; b < n; b++) {
+        var sum = 0;
+        for (var mm = 0; mm < n; mm++) {
+          for (var nn = 0; nn < n; nn++) {
+            sum += -ginv[a][mm] * ginv[b][nn] * dg.value[c][mm][nn];
+          }
+        }
+        row.push(sum);
+      }
+      slab.push(row);
+    }
+    dginv.push(slab);
+  }
+
+  // ∂_c Γ^a_ij
+  var dG = []; // dG[c][a][i][j]
+  for (var c = 0; c < n; c++) {
+    var slabC = [];
+    for (var a = 0; a < n; a++) {
+      var slabA = [];
+      for (var i = 0; i < n; i++) {
+        var row = [];
+        for (var j = 0; j < n; j++) {
+          var sum = 0;
+          for (var k = 0; k < n; k++) {
+            // Term 1: (1/2) ∂_c g^{ak} * (∂_i g_{jk} + ∂_j g_{ik} - ∂_k g_{ij})
+            sum += 0.5 * dginv[c][a][k] * (dg.value[i][j][k] + dg.value[j][i][k] - dg.value[k][i][j]);
+            // Term 2: (1/2) g^{ak} * (∂_c∂_i g_{jk} + ∂_c∂_j g_{ik} - ∂_c∂_k g_{ij})
+            sum += 0.5 * ginv[a][k] * (ddg_full[c][i][j][k] + ddg_full[c][j][i][k] - ddg_full[c][k][i][j]);
+          }
+          row.push(sum);
+        }
+        slabA.push(row);
+      }
+      slabC.push(slabA);
+    }
+    dG.push(slabC);
+  }
+
+  // Riemann: R^a_{bcd} = ∂_c Γ^a_{db} - ∂_d Γ^a_{cb} + Γ^a_{ce} Γ^e_{db} - Γ^a_{de} Γ^e_{cb}
+  var R = []; // R[a][b][c][d]
+  var riemannParts = [];
+  var fmt = function(x) { return Number.isInteger(x) ? x : +x.toFixed(6); };
+  for (var a = 0; a < n; a++) {
+    var ra = [];
+    for (var b = 0; b < n; b++) {
+      var rb = [];
+      for (var c = 0; c < n; c++) {
+        var rc = [];
+        for (var d = 0; d < n; d++) {
+          var val = dG[c][a][d][b] - dG[d][a][c][b];
+          for (var e = 0; e < n; e++) {
+            val += G[a][c][e] * G[e][d][b] - G[a][d][e] * G[e][c][b];
+          }
+          rc.push(val);
+          if (Math.abs(val) > 1e-10)
+            riemannParts.push('R^' + a + '_{' + b + c + d + '} = ' + fmt(val));
+        }
+        rb.push(rc);
+      }
+      ra.push(rb);
+    }
+    R.push(ra);
+  }
+
+  // Ricci: R_{ij} = R^k_{ikj}
+  var ricci = [];
+  for (var i = 0; i < n; i++) {
+    var row = [];
+    for (var j = 0; j < n; j++) {
+      var sum = 0;
+      for (var k = 0; k < n; k++) {
+        sum += R[k][i][k][j];
+      }
+      row.push(sum);
+    }
+    ricci.push(row);
+  }
+
+  // Scalar curvature: R = g^{ij} R_{ij}
+  var scalarR = 0;
+  for (var i = 0; i < n; i++) {
+    for (var j = 0; j < n; j++) {
+      scalarR += ginv[i][j] * ricci[i][j];
+    }
+  }
+
+  // Build display
+  var ricciParts = [];
+  for (var i = 0; i < n; i++) {
+    for (var j = 0; j < n; j++) {
+      if (Math.abs(ricci[i][j]) > 1e-10) ricciParts.push('R_{' + i + j + '}=' + fmt(ricci[i][j]));
+    }
+  }
+
+  var display = (riemannParts.length > 0 ? riemannParts.join(', ') : 'R=0 (flat)')
+    + ' | Ricci: ' + (ricciParts.length > 0 ? ricciParts.join(', ') : '0')
+    + ' | R=' + fmt(scalarR);
+  if (n === 2) {
+    var detG = g.value[0][0]*g.value[1][1] - g.value[0][1]*g.value[1][0];
+    var K = detG !== 0 ? scalarR / 2 : 0;
+    display += ' | K=' + fmt(K);
+  }
+
+  return {
+    kind: 'scalar', rank: 0, spaces: [], variances: [],
+    value: scalarR,
+    display: display,
+    explanation: 'Riemann curvature computed from metric and derivatives. Scalar curvature R = ' + fmt(scalarR) + '.',
+    riemann: R, ricci: ricci, scalarCurvature: scalarR
+  };
+}
+
+var builtinFunctions = {
+  trace: fnTrace,
+  transpose: fnTranspose,
+  det: fnDet,
+  inv: fnInv,
+  norm: fnNorm,
+  identity: fnIdentity,
+  eigenvalues: fnEigenvalues,
+  sym: fnSym,
+  antisym: fnAntisym,
+  contract: fnSelfContract
+};
+
+var twoArgFunctions = {
+  raise: fnRaise,
+  lower: fnLower,
+  christoffel: fnChristoffel
+};
+
+var threeArgFunctions = {
+  riemann: fnRiemann
+};
+
+// ─── Lexer ───
+function lex(input) {
+  var tokens = [];
+  var i = 0;
+  while (i < input.length) {
+    var ch = input[i];
+    if (/\s/.test(ch)) { i++; continue; }
+    // Numbers (but NOT negative — unary minus is handled by parser)
+    if (/[0-9]/.test(ch) || (ch === '.' && /[0-9]/.test(input[i+1] || ''))) {
+      var start = i; i++;
+      while (i < input.length && /[0-9.]/.test(input[i])) i++;
+      tokens.push({ type: 'number', value: input.slice(start, i), pos: start });
+      continue;
+    }
+    if (/[A-Za-z_]/.test(ch)) {
+      var start = i; i++;
+      while (i < input.length && /[A-Za-z0-9_*]/.test(input[i])) i++;
+      var word = input.slice(start, i);
+      // keywords
+      if (word === 'where') { tokens.push({ type: 'where', value: word, pos: start }); }
+      else if (word === 'let') { tokens.push({ type: 'let', value: word, pos: start }); }
+      else if (word === 'ring') { tokens.push({ type: 'ring', value: word, pos: start }); }
+      else if (word === 'space') { tokens.push({ type: 'space', value: word, pos: start }); }
+      else if (word === 'over') { tokens.push({ type: 'over', value: word, pos: start }); }
+      else if (word === 'dim') { tokens.push({ type: 'dim', value: word, pos: start }); }
+      else if (word === 'metric') { tokens.push({ type: 'metric', value: word, pos: start }); }
+      else { tokens.push({ type: 'identifier', value: word, pos: start }); }
+      continue;
+    }
+    if (ch === '+') tokens.push({ type: 'plus', value: ch, pos: i });
+    else if (ch === '-') tokens.push({ type: 'minus', value: ch, pos: i });
+    else if (ch === '*') tokens.push({ type: 'star', value: ch, pos: i });
+    else if (ch === '@') tokens.push({ type: 'contract', value: ch, pos: i });
+    else if (ch === '(') tokens.push({ type: 'lparen', value: ch, pos: i });
+    else if (ch === ')') tokens.push({ type: 'rparen', value: ch, pos: i });
+    else if (ch === ',') tokens.push({ type: 'comma', value: ch, pos: i });
+    else if (ch === ';') tokens.push({ type: 'semicolon', value: ch, pos: i });
+    else if (ch === '=') tokens.push({ type: 'equals', value: ch, pos: i });
+    else if (ch === '|') tokens.push({ type: 'pipe', value: ch, pos: i });
+    else throw ParseError("Unexpected character '" + ch + "'", i);
+    i++;
+  }
+  tokens.push({ type: 'eof', value: '', pos: input.length });
+  return tokens;
+}
+
+// ─── Parser ───
+function Parser(tokens, env) {
+  this.tokens = tokens;
+  this.index = 0;
+  this.env = env || {};
+}
+
+Parser.prototype.current = function() { return this.tokens[this.index]; };
+Parser.prototype.advance = function() { return this.tokens[this.index++]; };
+Parser.prototype.expect = function(type, msg) {
+  var t = this.current();
+  if (t.type !== type) throw ParseError(msg + " Found '" + t.value + "'", t.pos);
+  return this.advance();
+};
+
+Parser.prototype.parse = function() {
+  var expr = this.parseWhere();
+  if (this.current().type !== 'eof')
+    throw ParseError("Unexpected token '" + this.current().value + "'", this.current().pos);
+  return expr;
+};
+
+// where clause: expr where let x = ...; let y = ...
+Parser.prototype.parseWhere = function() {
+  var expr = this.parseAdditive();
+  if (this.current().type === 'where') {
+    var wherePos = this.advance().pos; // consume 'where'
+    var bindings = [];
+    while (this.current().type === 'let') {
+      this.advance(); // consume 'let'
+      var nameToken = this.expect('identifier', "Expected variable name after 'let'.");
+      this.expect('equals', "Expected '=' after variable name.");
+      var valExpr = this.parseAdditive();
+      bindings.push({ name: nameToken.value, expr: valExpr, pos: nameToken.pos });
+      if (this.current().type === 'semicolon') this.advance(); // optional separator
+    }
+    return { type: 'WhereExpr', body: expr, bindings: bindings, pos: wherePos };
+  }
+  return expr;
+};
+
+Parser.prototype.parseAdditive = function() {
+  var node = this.parseMultiplicative();
+  while (this.current().type === 'plus' || this.current().type === 'minus') {
+    var opToken = this.advance();
+    var op = opToken.value;
+    var right = this.parseMultiplicative();
+    if (op === '-') {
+      // Desugar A - B into A + ((-1) * B)
+      node = {
+        type: 'BinaryExpr', op: '+', left: node,
+        right: { type: 'UnaryNeg', operand: right, pos: opToken.pos },
+        pos: opToken.pos
+      };
+    } else {
+      node = { type: 'BinaryExpr', op: '+', left: node, right: right, pos: opToken.pos };
+    }
+  }
+  return node;
+};
+
+Parser.prototype.parseMultiplicative = function() {
+  var node = this.parseUnary();
+  while (this.current().type === 'star' || this.current().type === 'contract') {
+    var opToken = this.advance();
+    node = { type: 'BinaryExpr', op: opToken.type === 'star' ? '*' : '@', left: node, right: this.parseUnary(), pos: opToken.pos };
+  }
+  return node;
+};
+
+Parser.prototype.parseUnary = function() {
+  if (this.current().type === 'minus') {
+    var opToken = this.advance();
+    var operand = this.parseUnary(); // right-recursive for chained negation
+    return { type: 'UnaryNeg', operand: operand, pos: opToken.pos };
+  }
+  if (this.current().type === 'plus') {
+    this.advance(); // unary + is a no-op
+    return this.parseUnary();
+  }
+  return this.parsePrimary();
+};
+
+Parser.prototype.parsePrimary = function() {
+  var t = this.current();
+  if (t.type === 'number') {
+    this.advance();
+    return { type: 'TensorLiteral', raw: t.value, tensor: scalar(Number(t.value)), pos: t.pos };
+  }
+  if (t.type === 'identifier') {
+    var name = t.value;
+    // Check if it's a function call
+    if (this.tokens[this.index + 1] && this.tokens[this.index + 1].type === 'lparen') {
+      // Is it a known constructor or function?
+      if (/^(v|cv|m|t3)$/i.test(name)) {
+        return this.parseTensorConstructor();
+      }
+      if (threeArgFunctions[name]) {
+        return this.parseFunctionCall3();
+      }
+      if (builtinFunctions[name] || name === 'identity') {
+        return this.parseFunctionCall();
+      }
+      if (twoArgFunctions[name]) {
+        return this.parseFunctionCall2();
+      }
+    }
+    // Variable reference
+    this.advance();
+    return { type: 'VarRef', name: name, pos: t.pos };
+  }
+  if (t.type === 'lparen') {
+    this.advance();
+    var expr = this.parseAdditive();
+    this.expect('rparen', "Missing closing parenthesis.");
+    return expr;
+  }
+  throw ParseError("Unexpected token '" + t.value + "'", t.pos);
+};
+
+Parser.prototype.parseFunctionCall = function() {
+  var nameToken = this.advance(); // identifier
+  var name = nameToken.value;
+  this.expect('lparen', "Expected '(' after function name '" + name + "'.");
+  var arg = this.parseAdditive();
+  this.expect('rparen', "Expected ')' to close " + name + "(...).");
+  return { type: 'FuncCall', name: name, args: [arg], pos: nameToken.pos };
+};
+
+Parser.prototype.parseFunctionCall2 = function() {
+  var nameToken = this.advance(); // identifier
+  var name = nameToken.value;
+  this.expect('lparen', "Expected '(' after function name '" + name + "'.");
+  var arg1 = this.parseAdditive();
+  this.expect('comma', "Expected ',' separating arguments in " + name + "(a, b).");
+  var arg2 = this.parseAdditive();
+  this.expect('rparen', "Expected ')' to close " + name + "(...).");
+  return { type: 'FuncCall', name: name, args: [arg1, arg2], pos: nameToken.pos };
+};
+
+Parser.prototype.parseFunctionCall3 = function() {
+  var nameToken = this.advance();
+  var name = nameToken.value;
+  this.expect('lparen', "Expected '(' after function name '" + name + "'.");
+  var arg1 = this.parseAdditive();
+  this.expect('comma', "Expected ',' after first argument in " + name + "(a, b, c).");
+  var arg2 = this.parseAdditive();
+  this.expect('comma', "Expected ',' after second argument in " + name + "(a, b, c).");
+  var arg3 = this.parseAdditive();
+  this.expect('rparen', "Expected ')' to close " + name + "(...).");
+  return { type: 'FuncCall', name: name, args: [arg1, arg2, arg3], pos: nameToken.pos };
+};
+
+Parser.prototype.parseNumberComponent = function(context) {
+  // Allow negative numbers in constructor args: -3, etc.
+  var neg = false;
+  if (this.current().type === 'minus') {
+    neg = true;
+    this.advance();
+  }
+  var tok = this.expect('number', 'Expected numeric component in ' + context + '.');
+  var val = Number(tok.value);
+  return neg ? -val : val;
+};
+
+Parser.prototype.parseTensorConstructor = function() {
+  var nameToken = this.expect('identifier', 'Expected tensor constructor.');
+  var name = nameToken.value;
+  this.expect('lparen', "Expected '(' after " + name + ".");
+
+  if (/^(v|cv)$/i.test(name)) {
+    var values = [];
+    while (this.current().type !== 'rparen') {
+      values.push(this.parseNumberComponent(name + '(...)'));
+      if (this.current().type === 'comma') this.advance(); else break;
+    }
+    this.expect('rparen', "Expected ')' to close " + name + '(...).');
+    var raw = name + '(' + values.join(',') + ')';
+    return { type: 'TensorLiteral', raw: raw, tensor: /^v$/i.test(name) ? vector(values) : covector(values), pos: nameToken.pos };
+  }
+
+  // t3: slabs separated by |, rows by ;, elements by ,
+  if (/^t3$/i.test(name)) {
+    var slabs = [], rows = [], row = [];
+    while (this.current().type !== 'rparen') {
+      row.push(this.parseNumberComponent('t3(...)'));
+      if (this.current().type === 'comma') this.advance();
+      else if (this.current().type === 'semicolon') { this.advance(); rows.push(row); row = []; }
+      else if (this.current().type === 'pipe') { this.advance(); rows.push(row); slabs.push(rows); rows = []; row = []; }
+      else break;
+    }
+    rows.push(row);
+    slabs.push(rows);
+    this.expect('rparen', "Expected ')' to close t3(...).");
+    var raw = 't3(' + slabs.map(function(s){ return s.map(function(r){ return r.join(','); }).join(';'); }).join('|') + ')';
+    return { type: 'TensorLiteral', raw: raw, tensor: tensor3(slabs), pos: nameToken.pos };
+  }
+
+  // Matrix
+  var rows = [], row = [];
+  while (this.current().type !== 'rparen') {
+    row.push(this.parseNumberComponent('m(...)'));
+    if (this.current().type === 'comma') this.advance();
+    else if (this.current().type === 'semicolon') { this.advance(); rows.push(row); row = []; }
+    else break;
+  }
+  rows.push(row);
+  this.expect('rparen', "Expected ')' to close m(...).");
+  var raw = 'm(' + rows.map(function(r){ return r.join(','); }).join(';') + ')';
+  return { type: 'TensorLiteral', raw: raw, tensor: tensor2(rows), pos: nameToken.pos };
+};
+
+// ─── AST to string helpers ───
+function astToString(node) {
+  if (node.type === 'TensorLiteral') return node.raw;
+  if (node.type === 'VarRef') return node.name;
+  if (node.type === 'UnaryNeg') return '(-' + astToString(node.operand) + ')';
+  if (node.type === 'FuncCall') return node.name + '(' + node.args.map(function(a){ return astToString(a); }).join(', ') + ')';
+  if (node.type === 'WhereExpr') {
+    var binds = node.bindings.map(function(b){ return 'let ' + b.name + ' = ' + astToString(b.expr); }).join('; ');
+    return astToString(node.body) + ' where ' + binds;
+  }
+  return '(' + astToString(node.left) + ' ' + node.op + ' ' + astToString(node.right) + ')';
+}
+
+function astToTensorExpr(node, env) {
+  if (node.type === 'TensorLiteral') return node.tensor.display;
+  if (node.type === 'VarRef') {
+    if (env && env.variables && env.variables[node.name]) return env.variables[node.name].display;
+    return node.name;
+  }
+  if (node.type === 'UnaryNeg') return '-(' + astToTensorExpr(node.operand, env) + ')';
+  if (node.type === 'FuncCall') return node.name + '(' + node.args.map(function(a){ return astToTensorExpr(a, env); }).join(', ') + ')';
+  if (node.type === 'WhereExpr') return astToTensorExpr(node.body, env);
+  return '(' + astToTensorExpr(node.left, env) + ' ' + node.op + ' ' + astToTensorExpr(node.right, env) + ')';
+}
+
+function explainBinary(op) {
+  if (op === '+') return 'Addition in tensor-standard math is valid only for identical tensor types.';
+  if (op === '*') return '* is tensor product when both operands are tensors, or scalar scaling when one is rank-0.';
+  if (op === '@') return '@ is explicit contraction. Example: cv(1,2) @ v(3,4).';
+  return '';
+}
+
+// ─── Evaluate AST ───
+function evaluateAST(node, logs, env) {
+  if (node.type === 'TensorLiteral') {
+    logs.push("Literal '" + node.raw + "' \u21d2 " + tensorTypeString(node.tensor) + ' with value ' + node.tensor.display + '.');
+    return node.tensor;
+  }
+
+  if (node.type === 'VarRef') {
+    if (env && env.variables && env.variables[node.name]) {
+      var val = env.variables[node.name];
+      logs.push("Variable '" + node.name + "' \u21d2 " + tensorTypeString(val) + ' with value ' + val.display + '.');
+      return val;
+    }
+    throw TypeError_("Undefined variable '" + node.name + "'.", node.pos);
+  }
+
+  if (node.type === 'UnaryNeg') {
+    var operand = evaluateAST(node.operand, logs, env);
+    logs.push('Negate ' + operand.display + ' \u21d2 scale by -1.');
+    var result = negateTensor(operand);
+    logs.push('Result of negation \u21d2 ' + tensorTypeString(result) + ' with value ' + result.display + '.');
+    return result;
+  }
+
+  if (node.type === 'FuncCall') {
+    // Three-argument functions (riemann)
+    var fn3 = threeArgFunctions[node.name];
+    if (fn3) {
+      var a1 = evaluateAST(node.args[0], logs, env);
+      var a2 = evaluateAST(node.args[1], logs, env);
+      var a3 = evaluateAST(node.args[2], logs, env);
+      logs.push("Apply function '" + node.name + "' to " + a1.display + ', ' + a2.display + ', ' + a3.display + '.');
+      var result = fn3(a1, a2, a3, node.pos);
+      logs.push('Result of ' + node.name + '() \u21d2 ' + result.display + '.');
+      return result;
+    }
+    // Two-argument functions (raise, lower, christoffel)
+    var fn2 = twoArgFunctions[node.name];
+    if (fn2) {
+      var arg1 = evaluateAST(node.args[0], logs, env);
+      var arg2 = evaluateAST(node.args[1], logs, env);
+      logs.push("Apply function '" + node.name + "' to " + arg1.display + ' and ' + arg2.display + '.');
+      var inputType = tensorTypeString(arg1);
+      var result = fn2(arg1, arg2, node.pos);
+      var outputType = tensorTypeString(result);
+      logs.push(node.name + '(' + arg1.display + ', ' + arg2.display + '): ' + inputType + ' \u2192 ' + outputType + ' (raised/lowered variance).');
+      logs.push('Result of ' + node.name + '() \u21d2 ' + outputType + ' with value ' + result.display + '.');
+      return result;
+    }
+    // Single-argument functions
+    var arg = evaluateAST(node.args[0], logs, env);
+    logs.push("Apply function '" + node.name + "' to " + arg.display + '.');
+    var fn = builtinFunctions[node.name];
+    if (!fn) throw TypeError_("Unknown function '" + node.name + "'.", node.pos);
+    var result = fn(arg, node.pos);
+    logs.push('Result of ' + node.name + '() \u21d2 ' + tensorTypeString(result) + ' with value ' + result.display + '.');
+    if (result.symmetryWarning) {
+      logs.push(result.symmetryWarning);
+    }
+    return result;
+  }
+
+  if (node.type === 'WhereExpr') {
+    // Create a local scope
+    var localEnv = { variables: {}, spaces: {}, rings: {}, metrics: {}, tensors: {} };
+    if (env) {
+      if (env.variables) { for (var k in env.variables) localEnv.variables[k] = env.variables[k]; }
+      if (env.spaces) { for (var k in env.spaces) localEnv.spaces[k] = env.spaces[k]; }
+      if (env.rings) { for (var k in env.rings) localEnv.rings[k] = env.rings[k]; }
+      if (env.metrics) { for (var k in env.metrics) localEnv.metrics[k] = env.metrics[k]; }
+      if (env.tensors) { for (var k in env.tensors) localEnv.tensors[k] = env.tensors[k]; }
+    }
+    logs.push('Entering where-clause scope with ' + node.bindings.length + ' binding(s).');
+    for (var i = 0; i < node.bindings.length; i++) {
+      var b = node.bindings[i];
+      var val = evaluateAST(b.expr, logs, localEnv);
+      localEnv.variables[b.name] = val;
+      logs.push("Bound '" + b.name + "' = " + val.display + '.');
+    }
+    return evaluateAST(node.body, logs, localEnv);
+  }
+
+  // BinaryExpr
+  var left = evaluateAST(node.left, logs, env);
+  var right = evaluateAST(node.right, logs, env);
+  logs.push("Apply '" + node.op + "' to " + left.display + ' and ' + right.display + '. ' + explainBinary(node.op));
+
+  var out;
+  if (node.op === '+') out = addTensors(left, right, node.pos);
+  else if (node.op === '*') out = tensorProduct(left, right, node.pos);
+  else out = contract(left, right, node.pos);
+
+  var label = node.op === '+' ? 'addition' : node.op === '*' ? 'tensor product' : 'contraction';
+  logs.push('Result of ' + label + ' \u21d2 ' + tensorTypeString(out) + ' with value ' + out.display + '.');
+  if (out.symmetryWarning) {
+    logs.push(out.symmetryWarning);
+  }
+  return out;
+}
+
+// ─── Main evaluate (expression input) ───
+function evaluate(input, env) {
+  var normalized = input.trim();
+  var logs = [];
+  var errors = [];
+  try {
+    var tokens = lex(normalized);
+    logs.push('Lexed input into ' + (tokens.length - 1) + ' symbolic tokens.');
+    var parser = new Parser(tokens, env);
+    var ast = parser.parse();
+    logs.push('Parsed expression tree \u21d2 ' + astToString(ast) + '.');
+    var result = evaluateAST(ast, logs, env);
+    return {
+      input: input, normalized: normalized,
+      ast: astToString(ast), tensorExpr: astToTensorExpr(ast, env),
+      result: result, logs: logs, errors: [], error: null
+    };
+  } catch (e) {
+    var errObj = (e instanceof Object && e.type) ? e : { type: 'Error', message: e.message || String(e), pos: -1 };
+    errors.push(errObj);
+    return {
+      input: input, normalized: normalized,
+      ast: '\u2014', tensorExpr: '\u2014',
+      result: null, logs: logs, errors: errors, error: errObj.toString()
+    };
+  }
+}
+
+// ─── REPL Environment ───
+function createEnv() {
+  return { rings: {}, spaces: {}, variables: {}, metrics: {}, tensors: {} };
+}
+
+function cloneEnv(env) {
+  var e = createEnv();
+  for (var k in env.rings) e.rings[k] = env.rings[k];
+  for (var k in env.spaces) e.spaces[k] = env.spaces[k];
+  for (var k in env.variables) e.variables[k] = env.variables[k];
+  for (var k in env.metrics) e.metrics[k] = env.metrics[k];
+  for (var k in env.tensors) e.tensors[k] = env.tensors[k];
+  return e;
+}
+
+// Parse and execute a single REPL line
+function execReplLine(line, env) {
+  line = line.trim();
+  if (!line || line.startsWith('//') || line.startsWith('#')) {
+    return { status: 'skip' };
+  }
+
+  // ring R
+  var ringMatch = line.match(/^ring\s+([A-Za-z_]\w*)$/);
+  if (ringMatch) {
+    env.rings[ringMatch[1]] = { name: ringMatch[1] };
+    return { status: 'ok', msg: 'ring ' + ringMatch[1] + ' declared' };
+  }
+
+  // space V over R dim N
+  var spaceMatch = line.match(/^space\s+([A-Za-z_]\w*)\s+over\s+([A-Za-z_]\w*)\s+dim\s+(\d+)$/);
+  if (spaceMatch) {
+    var sName = spaceMatch[1], sRing = spaceMatch[2], sDim = parseInt(spaceMatch[3]);
+    if (!env.rings[sRing]) {
+      return { status: 'error', msg: "DimensionError: ring '" + sRing + "' not declared" };
+    }
+    env.spaces[sName] = { name: sName, ring: sRing, dim: sDim };
+    return { status: 'ok', msg: 'space ' + sName + ' over ' + sRing + ' dim ' + sDim + ' declared' };
+  }
+
+  // tensor T : Tensor<V+,V-> {sym(1,2)}
+  var tensorDeclMatch = line.match(/^tensor\s+([A-Za-z_]\w*)\s*:\s*Tensor<([^>]*)>\s*(\{[^}]*\})?$/);
+  if (tensorDeclMatch) {
+    var tName = tensorDeclMatch[1];
+    var slotsStr = tensorDeclMatch[2];
+    var structBlock = tensorDeclMatch[3] || '';
+    // Parse slots: "V+,V-" -> [{space:'V', variance:'+'}, {space:'V', variance:'-'}]
+    var slots = slotsStr.split(',').map(function(s) {
+      s = s.trim();
+      var variance = s.charAt(s.length - 1);
+      var space = s.substring(0, s.length - 1);
+      return { space: space, variance: variance };
+    });
+    // Parse optional structure block: "{sym(1,2), nondegenerate}" -> extract annotations
+    var symmetryAnnotation = null;
+    var annotations = [];
+    if (structBlock) {
+      var inner = structBlock.replace(/^\{/, '').replace(/\}$/, '').trim();
+      var parts = inner.split(',').map(function(p) { return p.trim(); });
+      for (var pi = 0; pi < parts.length; pi++) {
+        var symMatch = parts[pi].match(/^(sym|antisym)\s*\(([^)]*)\)$/);
+        if (symMatch) {
+          symmetryAnnotation = symMatch[1];
+        }
+        annotations.push(parts[pi]);
+      }
+    }
+    env.tensors[tName] = { name: tName, slots: slots, symmetry: symmetryAnnotation, annotations: annotations };
+    return { status: 'ok', msg: 'tensor ' + tName + ' : Tensor<' + slotsStr + '>' + (structBlock ? ' ' + structBlock : '') + ' declared' };
+  }
+
+  // metric g : Tensor<V-,V-> {sym(1,2), nondegenerate}  (type declaration, no value)
+  var metricDeclMatch = line.match(/^metric\s+([A-Za-z_]\w*)\s*:\s*Tensor<([^>]*)>\s*(\{[^}]*\})?$/);
+  if (metricDeclMatch) {
+    var mdName = metricDeclMatch[1];
+    var mdSlotsStr = metricDeclMatch[2];
+    var mdStructBlock = metricDeclMatch[3] || '';
+    var mdSlots = mdSlotsStr.split(',').map(function(s) {
+      s = s.trim();
+      var variance = s.charAt(s.length - 1);
+      var space = s.substring(0, s.length - 1);
+      return { space: space, variance: variance };
+    });
+    var mdSymmetry = null;
+    var mdAnnotations = [];
+    if (mdStructBlock) {
+      var mdInner = mdStructBlock.replace(/^\{/, '').replace(/\}$/, '').trim();
+      var mdParts = mdInner.split(',').map(function(p) { return p.trim(); });
+      for (var mpi = 0; mpi < mdParts.length; mpi++) {
+        var mdSymMatch = mdParts[mpi].match(/^(sym|antisym)\s*\(([^)]*)\)$/);
+        if (mdSymMatch) {
+          mdSymmetry = mdSymMatch[1];
+        }
+        mdAnnotations.push(mdParts[mpi]);
+      }
+    }
+    // Store as a tensor declaration AND a metric declaration (type only, no value)
+    env.tensors[mdName] = { name: mdName, slots: mdSlots, symmetry: mdSymmetry, annotations: mdAnnotations, isMetric: true };
+    env.metrics[mdName] = { kind: 'declaration', slots: mdSlots, symmetry: mdSymmetry, annotations: mdAnnotations };
+    return { status: 'ok', msg: 'metric ' + mdName + ' : Tensor<' + mdSlotsStr + '>' + (mdStructBlock ? ' ' + mdStructBlock : '') + ' declared' };
+  }
+
+  // metric g = expr
+  var metricMatch = line.match(/^metric\s+([A-Za-z_]\w*)\s*=\s*(.+)$/);
+  if (metricMatch) {
+    var mName = metricMatch[1], mExprStr = metricMatch[2];
+    var mRes = evaluate(mExprStr, env);
+    if (mRes.error) {
+      return { status: 'error', msg: mRes.error };
+    }
+    var mt = mRes.result;
+    if (!mt || mt.kind !== 'tensor2') {
+      return { status: 'error', msg: 'TypeError: metric declaration requires a rank-2 tensor, got ' + (mt ? mt.kind : 'null') + '.' };
+    }
+    if (mt.value.length !== mt.value[0].length) {
+      return { status: 'error', msg: 'DimensionError: metric must be square.' };
+    }
+    env.variables[mName] = mt;
+    env.metrics[mName] = mt;
+    return { status: 'ok', msg: 'metric ' + mName + ' = ' + mt.display + ' declared' };
+  }
+
+  // let x = expr
+  var letMatch = line.match(/^let\s+([A-Za-z_]\w*)\s*=\s*(.+)$/);
+  if (letMatch) {
+    var varName = letMatch[1], exprStr = letMatch[2];
+    var res = evaluate(exprStr, env);
+    if (res.error) {
+      return { status: 'error', msg: res.error };
+    }
+    // Dimension validation against declared spaces
+    var t = res.result;
+    if (t && (t.kind === 'vector' || t.kind === 'covector')) {
+      // Check if any space has a matching name and conflicting dimension
+      for (var sk in env.spaces) {
+        var sp = env.spaces[sk];
+        if (t.spaces[0] === sk || t.spaces[0] === sk + '*') {
+          if (t.value.length !== sp.dim) {
+            return { status: 'error', msg: 'DimensionError: ' + varName + ' has dimension ' + t.value.length + ' but space ' + sk + ' has dim ' + sp.dim };
+          }
+        }
+      }
+    }
+    if (t && t.kind === 'tensor2') {
+      var rows = t.value.length, cols = t.value[0].length;
+      for (var sk in env.spaces) {
+        var sp = env.spaces[sk];
+        if (t.spaces[0] === sk && rows !== sp.dim) {
+          return { status: 'error', msg: 'DimensionError: matrix has ' + rows + ' rows but space ' + sk + ' has dim ' + sp.dim };
+        }
+        if ((t.spaces[1] === sk || t.spaces[1] === sk + '*') && cols !== sp.dim) {
+          return { status: 'error', msg: 'DimensionError: matrix has ' + cols + ' columns but space ' + sk + ' has dim ' + sp.dim };
+        }
+      }
+    }
+    // Validate against tensor declaration if one exists
+    if (env.tensors[varName] && t) {
+      var decl = env.tensors[varName];
+      var declRank = decl.slots.length;
+      if (t.rank !== declRank) {
+        return { status: 'error', msg: 'TypeError: ' + varName + ' declared as rank-' + declRank + ' but assigned rank-' + t.rank + ' value.' };
+      }
+      if (declRank === 1) {
+        if (decl.slots[0].variance === '+' && t.kind !== 'vector') {
+          return { status: 'error', msg: 'TypeError: ' + varName + ' declared with contravariant (+) slot but assigned ' + t.kind + '.' };
+        }
+        if (decl.slots[0].variance === '-' && t.kind !== 'covector') {
+          return { status: 'error', msg: 'TypeError: ' + varName + ' declared with covariant (-) slot but assigned ' + t.kind + '.' };
+        }
+      }
+      // Dimension check against declared spaces
+      for (var si = 0; si < decl.slots.length; si++) {
+        var slotSpace = decl.slots[si].space;
+        if (env.spaces[slotSpace]) {
+          var expectedDim = env.spaces[slotSpace].dim;
+          var actualDim;
+          if (t.kind === 'vector' || t.kind === 'covector') {
+            actualDim = t.value.length;
+          } else if (t.kind === 'tensor2') {
+            actualDim = si === 0 ? t.value.length : t.value[0].length;
+          }
+          if (actualDim !== undefined && actualDim !== expectedDim) {
+            return { status: 'error', msg: 'DimensionError: ' + varName + ' slot ' + si + ' declared over space ' + slotSpace + ' (dim ' + expectedDim + ') but value has dimension ' + actualDim + '.' };
+          }
+        }
+      }
+    }
+    // Validate metric declaration if assigning to a declared metric
+    if (env.metrics[varName] && env.metrics[varName].kind === 'declaration' && t) {
+      if (t.kind !== 'tensor2') {
+        return { status: 'error', msg: 'TypeError: metric ' + varName + ' requires a rank-2 tensor, got ' + t.kind + '.' };
+      }
+      if (t.value.length !== t.value[0].length) {
+        return { status: 'error', msg: 'DimensionError: metric ' + varName + ' must be square.' };
+      }
+      // Upgrade the metric declaration to a value
+      env.metrics[varName] = t;
+    }
+    env.variables[varName] = t;
+    return { status: 'ok', msg: varName + ' = ' + t.display };
+  }
+
+  // Otherwise it is an expression to evaluate
+  var res = evaluate(line, env);
+  if (res.error) {
+    return { status: 'error', msg: res.error };
+  }
+  return { status: 'result', msg: res.result.display + '  (' + tensorTypeString(res.result) + ')' };
+}
+
+
+// =====================================================================
+//  UI Controller
+// =====================================================================
+
+var exampleLevels = [
+  {
+    title: 'Scalars as Rank-0 Tensors',
+    color: 1,
+    open: true,
+    items: [
+      { label: '1 + 2', input: '1 + 2', tip: 'Even ordinary arithmetic lives inside the tensor world' },
+      { label: '5 - 3', input: '5 - 3', tip: 'Subtraction desugars to A + (\u22121)\u00b7B \u2014 no primitive minus' },
+      { label: '2 * (3 + 4)', input: '2 * (3 + 4)', tip: 'Scalar \u00d7 scalar is rank-0 tensor product' },
+      { label: '--7', input: '--7', tip: 'Double negation: \u22121 \u00b7 (\u22121 \u00b7 7) = 7' },
+    ]
+  },
+  {
+    title: 'Vectors & Covectors',
+    color: 2,
+    open: true,
+    items: [
+      { label: 'v(3,4)', input: 'v(3,4)', tip: 'A contravariant vector \u2014 lives in V\u207a' },
+      { label: 'cv(1,2)', input: 'cv(1,2)', tip: 'A covariant covector \u2014 lives in V\u207b (the dual)' },
+      { label: 'cv(1,2) @ v(3,4)', input: 'cv(1,2) @ v(3,4)', tip: 'The fundamental pairing: covector eats vector \u2192 scalar' },
+      { label: 'v(2,1) * cv(5,7)', input: 'v(2,1) * cv(5,7)', tip: 'Building a rank-2 tensor with the tensor product' },
+      { label: '(cv(1,2) @ v(3,4)) + 5', input: '(cv(1,2) @ v(3,4)) + 5', tip: 'Contraction yields a scalar \u2014 so it can add with scalars' },
+    ]
+  },
+  {
+    title: 'Matrices as Linear Maps',
+    color: 3,
+    open: false,
+    items: [
+      { label: 'm(1,2;3,4) @ v(5,6)', input: 'm(1,2;3,4) @ v(5,6)', tip: 'Matrix-vector multiply is just tensor contraction' },
+      { label: 'trace(m(1,2;3,4))', input: 'trace(m(1,2;3,4))', tip: 'Trace: the basis-independent self-contraction' },
+      { label: 'det(m(2,1;4,3))', input: 'det(m(2,1;4,3))', tip: 'Determinant \u2014 measures volume distortion' },
+      { label: 'inv(m(1,0;0,2))', input: 'inv(m(1,0;0,2))', tip: 'Inverse flips the map (variance swap)' },
+      { label: 'transpose(m(1,2;3,4))', input: 'transpose(m(1,2;3,4))', tip: 'Swap rows and columns \u2014 or dually, swap slots' },
+      { label: 'sym(m(1,2;3,4))', input: 'sym(m(1,2;3,4))', tip: 'Symmetric part: (T + T\u1d40) / 2' },
+      { label: 'antisym(m(1,2;3,4))', input: 'antisym(m(1,2;3,4))', tip: 'Antisymmetric part: (T \u2212 T\u1d40) / 2' },
+    ]
+  },
+  {
+    title: 'Composition & Chaining',
+    color: 4,
+    open: false,
+    items: [
+      { label: 'm(0,1;-1,0) @ v(3,4)', input: 'm(0,1;-1,0) @ v(3,4)', tip: '90\u00b0 rotation matrix applied to a vector' },
+      { label: 'norm(v(3,4))', input: 'norm(v(3,4))', tip: 'Euclidean norm \u2014 the length living inside the algebra' },
+      { label: 'eigenvalues(m(2,1;1,3))', input: 'eigenvalues(m(2,1;1,3))', tip: 'Spectral decomposition of a symmetric endomorphism' },
+      { label: 'lower(v(3,4), m(1,0;0,1))', input: 'lower(v(3,4), m(1,0;0,1))', tip: 'Metric lowers a vector to a covector \u2014 variance changes' },
+      { label: 'raise(cv(3,4), m(1,0;0,1))', input: 'raise(cv(3,4), m(1,0;0,1))', tip: 'Inverse metric raises a covector back to a vector' },
+      { label: 'trace(m(1,2;3,4) @ m(5,6;7,8))', input: 'trace(m(1,2;3,4) @ m(5,6;7,8))', tip: 'Trace of product \u2014 cyclic contraction appears naturally' },
+    ]
+  },
+  {
+    title: 'Gotchas & Type Errors',
+    color: 5,
+    open: false,
+    items: [
+      { label: 'v(1,2) + cv(3,4)', input: 'v(1,2) + cv(3,4)', tip: 'TypeError: can\u2019t add a vector to a covector \u2014 different variance' },
+      { label: 'v(1,2) + v(1,2,3)', input: 'v(1,2) + v(1,2,3)', tip: 'TypeError: dimension mismatch \u2014 R\u00b2 \u2260 R\u00b3' },
+      { label: 'v(1,2) @ v(3,4)', input: 'v(1,2) @ v(3,4)', tip: 'VarianceError: @ needs covector\u00b7vector, not vector\u00b7vector' },
+      { label: 'inv(m(1,2;3,4;5,6))', input: 'inv(m(1,2;3,4;5,6))', tip: 'ShapeError: inverse requires a square matrix' },
+    ]
+  },
+  {
+    title: 'General Relativity',
+    color: 6,
+    open: false,
+    items: [
+      { label: 't3(0,0;0,1|0,0;0,0)', input: 't3(0,0;0,1|0,0;0,0)', tip: 'Rank-3 tensor literal \u2014 metric derivatives of a 2D sphere' },
+      { label: 'christoffel(m(1,0;0,0.75), t3(0,0;0,0.866|0,0;0,0))', input: 'christoffel(m(1,0;0,0.75), t3(0,0;0,0.866|0,0;0,0))', tip: 'Christoffel symbols for sphere at \u03b8=\u03c0/3: \u0393 from metric + derivatives' },
+      { label: 'christoffel(m(1,0;0,1), t3(0,0;0,0|0,0;0,0))', input: 'christoffel(m(1,0;0,1), t3(0,0;0,0|0,0;0,0))', tip: 'Flat Euclidean metric \u2014 all Christoffel symbols vanish' },
+      { label: 'riemann (sphere R=2)', input: 'riemann(m(1,0;0,0.75), t3(0,0;0,0.866|0,0;0,0), t3(0,0;0,-1|0,0;0,0|0,0;0,0|0,0;0,0))', tip: 'Unit sphere at \u03b8=\u03c0/3: Riemann, Ricci, scalar curvature R=2, Gaussian K=1' },
+    ]
+  }
+];
+
+var strictRules = [
+  'Plain numerals are auto-promoted to rank-0 tensors.',
+  "'+' requires identical tensor type.",
+  "'-' desugars to A + (-1) * B.",
+  "'*' means tensor product unless one side is scalar (then scaling).",
+  "'@' means contraction and is always explicit.",
+  "Functions (trace, det, inv, transpose, norm, identity, sym, antisym, eigenvalues, contract) operate on tensors.",
+  "'raise(v, g)' and 'lower(v, g)' require a metric tensor to change variance.",
+  "sym() and antisym() project a rank-2 tensor into its symmetric/antisymmetric parts.",
+  "eigenvalues() computes the spectrum of an endomorphism (rank-2, same-space slots).",
+  "tensor and metric declarations establish type constraints validated on binding.",
+  "christoffel(g, dg) computes \u0393^l_ij from a metric and its rank-3 derivative tensor.",
+  "riemann(g, dg, ddg) computes full Riemann curvature, Ricci tensor, and scalar curvature R.",
+];
+
+var educationalRules = [
+  'Educational mode explains ordinary arithmetic as special cases of tensor-standard math.',
+  '1 + 2 is displayed as T[] + T[] \u2192 T[].',
+  'Vector and covector literals expose rank and variance.',
+  'Subtraction is not a primitive \u2014 it desugars to addition with negation.',
+  'The goal is not just to compute, but to reveal structure.'
+];
+
+// ─── DOM refs ───
+var $input = document.getElementById('exprInput');
+var $mode = document.getElementById('modeSelect');
+var $examples = document.getElementById('examples');
+var $rules = document.getElementById('rulesContainer');
+var $dispInput = document.getElementById('dispInput');
+var $dispTensor = document.getElementById('dispTensor');
+var $dispAST = document.getElementById('dispAST');
+var $dispResult = document.getElementById('dispResult');
+var $resultBlock = document.getElementById('resultBlock');
+var $badges = document.getElementById('badgesContainer');
+var $explanation = document.getElementById('dispExplanation');
+var $trace = document.getElementById('traceContainer');
+var $errorDisplay = document.getElementById('errorDisplay');
+
+// REPL refs
+var $replTextarea = document.getElementById('replTextarea');
+var $replLineNumbers = document.getElementById('replLineNumbers');
+var $replOutput = document.getElementById('replOutput');
+var $replRun = document.getElementById('replRun');
+var $replClear = document.getElementById('replClear');
+var $replClearEnv = document.getElementById('replClearEnv');
+var $envBody = document.getElementById('envBody');
+
+// Persistent REPL environment
+var replEnv = createEnv();
+
+// ─── Render leveled examples ───
+exampleLevels.forEach(function(level) {
+  var section = document.createElement('div');
+  section.className = 'example-level level-color-' + level.color + (level.open ? ' open' : '');
+
+  var header = document.createElement('div');
+  header.className = 'example-level-header';
+  header.innerHTML = '<span class="level-pip"></span>'
+    + '<span class="level-label">' + level.title + '</span>'
+    + '<span class="level-chevron">\u25B6</span>';
+  header.addEventListener('click', function() {
+    section.classList.toggle('open');
+  });
+
+  var body = document.createElement('div');
+  body.className = 'example-level-body';
+
+  level.items.forEach(function(ex) {
+    var btn = document.createElement('button');
+    btn.className = 'example-btn';
+    btn.textContent = ex.label;
+    var tip = document.createElement('span');
+    tip.className = 'ex-tooltip';
+    tip.textContent = ex.tip;
+    btn.appendChild(tip);
+    btn.addEventListener('click', function() {
+      $input.value = ex.input;
+      $input.focus();
+      render();
+    });
+    body.appendChild(btn);
+  });
+
+  section.appendChild(header);
+  section.appendChild(body);
+  $examples.appendChild(section);
+});
+
+// ─── Render rules ───
+function renderRules() {
+  var rules = $mode.value === 'strict' ? strictRules : educationalRules;
+  $rules.innerHTML = '';
+  rules.forEach(function(r) {
+    var div = document.createElement('div');
+    div.className = 'rule-item';
+    div.textContent = r;
+    $rules.appendChild(div);
+  });
+}
+
+// ─── Tabs ───
+document.querySelectorAll('.tab-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.tab-btn').forEach(function(b){ b.classList.remove('active'); });
+    document.querySelectorAll('.tab-panel').forEach(function(p){ p.classList.remove('active'); });
+    btn.classList.add('active');
+    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+// ─── Error display helper ───
+function renderErrors(errors, inputStr) {
+  $errorDisplay.innerHTML = '';
+  if (!errors || errors.length === 0) return;
+  var container = document.createElement('div');
+  container.className = 'error-list';
+  errors.forEach(function(err) {
+    var item = document.createElement('div');
+    item.className = 'error-item';
+    var typeSpan = document.createElement('span');
+    typeSpan.className = 'error-type';
+    typeSpan.textContent = err.type || 'Error';
+    item.appendChild(typeSpan);
+    item.appendChild(document.createTextNode(err.message || String(err)));
+    if (err.pos >= 0) {
+      var posSpan = document.createElement('span');
+      posSpan.className = 'error-pos';
+      posSpan.textContent = ' [pos ' + err.pos + ']';
+      item.appendChild(posSpan);
+      // Show pointer
+      if (inputStr) {
+        var pointer = document.createElement('div');
+        pointer.className = 'error-pointer';
+        var line1 = document.createTextNode(inputStr);
+        pointer.appendChild(line1);
+        pointer.appendChild(document.createElement('br'));
+        var caretLine = '';
+        for (var i = 0; i < err.pos; i++) caretLine += ' ';
+        var preText = document.createTextNode(caretLine);
+        var caret = document.createElement('span');
+        caret.className = 'caret';
+        caret.textContent = '^';
+        pointer.appendChild(preText);
+        pointer.appendChild(caret);
+        item.appendChild(pointer);
+      }
+    }
+    container.appendChild(item);
+  });
+  $errorDisplay.appendChild(container);
+}
+
+// ─── Main render ───
+function render() {
+  var res = evaluate($input.value);
+
+  $dispInput.textContent = res.normalized || '\u2014';
+  $dispTensor.textContent = res.tensorExpr;
+  $dispAST.textContent = res.ast;
+
+  // Errors
+  renderErrors(res.errors, res.normalized);
+
+  if (res.error) {
+    $dispResult.textContent = res.errors.length > 0 ? res.errors[0].message : res.error;
+    $dispResult.className = 'readout-value error';
+    $badges.innerHTML = '';
+    $explanation.textContent = 'Evaluation failed.';
+  } else if (res.result) {
+    $dispResult.textContent = res.result.display;
+    $dispResult.className = 'readout-value large';
+
+    // Badges
+    $badges.innerHTML = '';
+    var b1 = document.createElement('span'); b1.className = 'badge badge-kind'; b1.textContent = 'kind: ' + res.result.kind; $badges.appendChild(b1);
+    var b2 = document.createElement('span'); b2.className = 'badge badge-rank'; b2.textContent = 'rank: ' + res.result.rank; $badges.appendChild(b2);
+    if (res.result.spaces.length > 0) {
+      var b3 = document.createElement('span'); b3.className = 'badge badge-space'; b3.textContent = 'spaces: ' + res.result.spaces.join(', '); $badges.appendChild(b3);
+    }
+    if (res.result.variances.length > 0) {
+      var b4 = document.createElement('span'); b4.className = 'badge badge-var'; b4.textContent = 'variance: ' + res.result.variances.join(' '); $badges.appendChild(b4);
+    }
+
+    $explanation.textContent = res.result.explanation;
+  }
+
+  // Trace
+  $trace.innerHTML = '';
+  if (res.logs.length === 0) {
+    $trace.innerHTML = '<div class="trace-empty">No trace yet.</div>';
+  } else {
+    res.logs.forEach(function(log, i) {
+      var div = document.createElement('div');
+      div.className = 'trace-step';
+      div.setAttribute('data-index', i + 1);
+      div.style.animationDelay = (i * 0.04) + 's';
+      div.textContent = log;
+      $trace.appendChild(div);
+    });
+  }
+}
+
+// ─── REPL line numbers ───
+function updateLineNumbers() {
+  var lines = $replTextarea.value.split('\n');
+  var count = Math.max(lines.length, 1);
+  $replLineNumbers.innerHTML = '';
+  for (var i = 1; i <= count; i++) {
+    var span = document.createElement('span');
+    span.className = 'line-num';
+    span.textContent = i;
+    $replLineNumbers.appendChild(span);
+  }
+}
+
+$replTextarea.addEventListener('input', updateLineNumbers);
+$replTextarea.addEventListener('scroll', function() {
+  $replLineNumbers.scrollTop = $replTextarea.scrollTop;
+});
+
+// ─── REPL environment display ───
+function renderEnvPanel() {
+  $envBody.innerHTML = '';
+  var hasContent = false;
+
+  // Rings
+  var ringKeys = Object.keys(replEnv.rings);
+  if (ringKeys.length > 0) {
+    hasContent = true;
+    var sec = document.createElement('div');
+    sec.className = 'env-section';
+    var title = document.createElement('div');
+    title.className = 'env-section-title';
+    title.textContent = 'Rings';
+    sec.appendChild(title);
+    ringKeys.forEach(function(k) {
+      var entry = document.createElement('div');
+      entry.className = 'env-entry';
+      entry.innerHTML = '<span class="env-name">' + k + '</span>';
+      sec.appendChild(entry);
+    });
+    $envBody.appendChild(sec);
+  }
+
+  // Spaces
+  var spaceKeys = Object.keys(replEnv.spaces);
+  if (spaceKeys.length > 0) {
+    hasContent = true;
+    var sec = document.createElement('div');
+    sec.className = 'env-section';
+    var title = document.createElement('div');
+    title.className = 'env-section-title';
+    title.textContent = 'Spaces';
+    sec.appendChild(title);
+    spaceKeys.forEach(function(k) {
+      var sp = replEnv.spaces[k];
+      var entry = document.createElement('div');
+      entry.className = 'env-entry';
+      entry.innerHTML = '<span class="env-name">' + sp.name + '</span> <span class="env-type">over ' + sp.ring + ' dim ' + sp.dim + '</span>';
+      sec.appendChild(entry);
+    });
+    $envBody.appendChild(sec);
+  }
+
+  // Tensor Declarations
+  var tensorKeys = Object.keys(replEnv.tensors);
+  if (tensorKeys.length > 0) {
+    hasContent = true;
+    var sec = document.createElement('div');
+    sec.className = 'env-section';
+    var title = document.createElement('div');
+    title.className = 'env-section-title';
+    title.textContent = 'Tensor Declarations';
+    sec.appendChild(title);
+    tensorKeys.forEach(function(k) {
+      var td = replEnv.tensors[k];
+      var slotsStr = td.slots.map(function(s) { return s.space + s.variance; }).join(', ');
+      var annStr = td.annotations && td.annotations.length > 0 ? ' {' + td.annotations.join(', ') + '}' : '';
+      var entry = document.createElement('div');
+      entry.className = 'env-entry';
+      entry.innerHTML = '<span class="env-name">' + k + '</span> <span class="env-type">: Tensor&lt;' + slotsStr + '&gt;' + annStr + '</span>';
+      sec.appendChild(entry);
+    });
+    $envBody.appendChild(sec);
+  }
+
+  // Metrics
+  var metricKeys = Object.keys(replEnv.metrics);
+  if (metricKeys.length > 0) {
+    hasContent = true;
+    var sec = document.createElement('div');
+    sec.className = 'env-section';
+    var title = document.createElement('div');
+    title.className = 'env-section-title';
+    title.textContent = 'Metrics';
+    sec.appendChild(title);
+    metricKeys.forEach(function(k) {
+      var m = replEnv.metrics[k];
+      var entry = document.createElement('div');
+      entry.className = 'env-entry';
+      if (m.kind === 'declaration') {
+        var mSlotsStr = m.slots.map(function(s) { return s.space + s.variance; }).join(', ');
+        var mAnnStr = m.annotations && m.annotations.length > 0 ? ' {' + m.annotations.join(', ') + '}' : '';
+        entry.innerHTML = '<span class="env-name">' + k + '</span> <span class="env-type">: Tensor&lt;' + mSlotsStr + '&gt;' + mAnnStr + ' (declared, no value)</span>';
+      } else {
+        entry.innerHTML = '<span class="env-name">' + k + '</span> <span class="env-type">: ' + tensorTypeString(m) + '</span><br>' + m.display;
+      }
+      sec.appendChild(entry);
+    });
+    $envBody.appendChild(sec);
+  }
+
+  // Variables
+  var varKeys = Object.keys(replEnv.variables);
+  if (varKeys.length > 0) {
+    hasContent = true;
+    var sec = document.createElement('div');
+    sec.className = 'env-section';
+    var title = document.createElement('div');
+    title.className = 'env-section-title';
+    title.textContent = 'Variables';
+    sec.appendChild(title);
+    varKeys.forEach(function(k) {
+      var v = replEnv.variables[k];
+      var entry = document.createElement('div');
+      entry.className = 'env-entry';
+      entry.innerHTML = '<span class="env-name">' + k + '</span> <span class="env-type">: ' + tensorTypeString(v) + '</span><br>' + v.display;
+      sec.appendChild(entry);
+    });
+    $envBody.appendChild(sec);
+  }
+
+  if (!hasContent) {
+    $envBody.innerHTML = '<div class="env-empty">No declarations yet.</div>';
+  }
+}
+
+// ─── REPL run ───
+function runRepl() {
+  var code = $replTextarea.value;
+  var lines = code.split('\n');
+  $replOutput.innerHTML = '';
+
+  lines.forEach(function(line, idx) {
+    var trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('//') || trimmed.startsWith('#')) return;
+
+    var lineEl = document.createElement('div');
+    lineEl.className = 'repl-output-line';
+
+    var prefix = document.createElement('span');
+    prefix.className = 'line-prefix';
+    prefix.textContent = (idx + 1) + ':';
+    lineEl.appendChild(prefix);
+
+    var result = execReplLine(trimmed, replEnv);
+    if (result.status === 'skip') return;
+
+    if (result.status === 'ok') {
+      lineEl.classList.add('repl-ok');
+      lineEl.appendChild(document.createTextNode(result.msg));
+    } else if (result.status === 'result') {
+      lineEl.classList.add('repl-result');
+      lineEl.appendChild(document.createTextNode(result.msg));
+    } else if (result.status === 'error') {
+      lineEl.classList.add('repl-error');
+      lineEl.appendChild(document.createTextNode(result.msg));
+    }
+
+    $replOutput.appendChild(lineEl);
+  });
+
+  if ($replOutput.children.length === 0) {
+    $replOutput.innerHTML = '<div style="color: var(--text-dim); font-style: italic;">No output.</div>';
+  }
+
+  renderEnvPanel();
+}
+
+$replRun.addEventListener('click', runRepl);
+
+// Ctrl+Enter to run
+$replTextarea.addEventListener('keydown', function(e) {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+    e.preventDefault();
+    runRepl();
+  }
+  // Tab key inserts spaces
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    var start = this.selectionStart;
+    var end = this.selectionEnd;
+    this.value = this.value.substring(0, start) + '  ' + this.value.substring(end);
+    this.selectionStart = this.selectionEnd = start + 2;
+    updateLineNumbers();
+  }
+});
+
+$replClear.addEventListener('click', function() {
+  $replTextarea.value = '';
+  $replOutput.innerHTML = '<div style="color: var(--text-dim); font-style: italic;">Output will appear here after running.</div>';
+  updateLineNumbers();
+});
+
+$replClearEnv.addEventListener('click', function() {
+  replEnv = createEnv();
+  renderEnvPanel();
+  $replOutput.innerHTML = '<div style="color: var(--text-dim); font-style: italic;">Environment cleared.</div>';
+});
+
+// ─── Event listeners ───
+$input.addEventListener('input', render);
+$mode.addEventListener('change', function() { renderRules(); });
+
+// ─── Initial render ───
+renderRules();
+render();
+updateLineNumbers();
+renderEnvPanel();
+
+// Focus input
+$input.focus();
+$input.setSelectionRange($input.value.length, $input.value.length);
+
+// ─── Specification Tab ───
+(function() {
+  var specRaw = document.getElementById('specRawContent').textContent.trim();
+
+  // Parse into sections by ## headings
+  var sections = [];
+  var lines = specRaw.split('\n');
+  var current = null;
+
+  for (var i = 0; i < lines.length; i++) {
+    var line = lines[i];
+    if (line.match(/^## /)) {
+      if (current) sections.push(current);
+      current = { title: line.replace(/^## /, ''), body: '' };
+    } else if (current) {
+      current.body += line + '\n';
+    }
+  }
+  if (current) sections.push(current);
+
+  // Simple markdown to HTML converter
+  function mdToHtml(md) {
+    // Trim leading/trailing whitespace
+    md = md.replace(/^\n+/, '').replace(/\n+$/, '');
+    if (!md) return '';
+
+    var html = '';
+    var inCodeBlock = false;
+    var codeLang = '';
+    var codeContent = '';
+    var inTable = false;
+    var tableRows = [];
+    var inList = false;
+    var listType = '';
+    var listItems = [];
+    var lines = md.split('\n');
+
+    function flushList() {
+      if (inList && listItems.length) {
+        var tag = listType === 'ol' ? 'ol' : 'ul';
+        html += '<' + tag + '>' + listItems.map(function(li) { return '<li>' + inlineFormat(li) + '</li>'; }).join('') + '</' + tag + '>';
+        listItems = [];
+        inList = false;
+      }
+    }
+
+    function flushTable() {
+      if (inTable && tableRows.length) {
+        html += '<table>';
+        for (var r = 0; r < tableRows.length; r++) {
+          if (r === 1 && tableRows[r].match(/^[\s|:-]+$/)) continue; // skip separator
+          var tag = r === 0 ? 'th' : 'td';
+          var cells = tableRows[r].split('|').map(function(c) { return c.trim(); }).filter(function(c) { return c; });
+          html += '<tr>' + cells.map(function(c) { return '<' + tag + '>' + inlineFormat(c) + '</' + tag + '>'; }).join('') + '</tr>';
+        }
+        html += '</table>';
+        tableRows = [];
+        inTable = false;
+      }
+    }
+
+    function inlineFormat(text) {
+      // Code spans
+      text = text.replace(/`([^`]+)`/g, '<code>$1</code>');
+      // Bold
+      text = text.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+      // Italic
+      text = text.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+      return text;
+    }
+
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+
+      // Code blocks
+      if (line.match(/^```/)) {
+        if (inCodeBlock) {
+          flushList();
+          html += '<pre><code class="lang-' + codeLang + '">' + codeContent.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</code></pre>';
+          inCodeBlock = false;
+          codeContent = '';
+          codeLang = '';
+        } else {
+          flushList();
+          flushTable();
+          inCodeBlock = true;
+          codeLang = line.replace(/^```/, '').trim() || 'text';
+        }
+        continue;
+      }
+
+      if (inCodeBlock) {
+        codeContent += (codeContent ? '\n' : '') + line;
+        continue;
+      }
+
+      // Horizontal rule
+      if (line.match(/^---+$/)) {
+        flushList();
+        flushTable();
+        html += '<hr>';
+        continue;
+      }
+
+      // Table rows
+      if (line.match(/^\|/)) {
+        flushList();
+        if (!inTable) inTable = true;
+        tableRows.push(line);
+        continue;
+      } else {
+        flushTable();
+      }
+
+      // Headings
+      if (line.match(/^#### /)) {
+        flushList();
+        html += '<h4>' + inlineFormat(line.replace(/^#### /, '')) + '</h4>';
+        continue;
+      }
+      if (line.match(/^### /)) {
+        flushList();
+        html += '<h3>' + inlineFormat(line.replace(/^### /, '')) + '</h3>';
+        continue;
+      }
+
+      // List items
+      if (line.match(/^\s*- /)) {
+        if (!inList || listType !== 'ul') {
+          flushList();
+          inList = true;
+          listType = 'ul';
+        }
+        listItems.push(line.replace(/^\s*- /, ''));
+        continue;
+      }
+      if (line.match(/^\s*\d+\.\s/)) {
+        if (!inList || listType !== 'ol') {
+          flushList();
+          inList = true;
+          listType = 'ol';
+        }
+        listItems.push(line.replace(/^\s*\d+\.\s/, ''));
+        continue;
+      }
+
+      // Continuation of list item (indented)
+      if (inList && line.match(/^\s{2,}/) && line.trim()) {
+        if (listItems.length) {
+          listItems[listItems.length - 1] += ' ' + line.trim();
+        }
+        continue;
+      }
+
+      flushList();
+
+      // Empty line
+      if (!line.trim()) {
+        continue;
+      }
+
+      // Paragraph
+      html += '<p>' + inlineFormat(line) + '</p>';
+    }
+
+    flushList();
+    flushTable();
+    if (inCodeBlock) {
+      html += '<pre><code>' + codeContent.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</code></pre>';
+    }
+
+    return html;
+  }
+
+  // Render sections
+  var $specSections = document.getElementById('specSections');
+  var sectionEls = [];
+
+  sections.forEach(function(sec, idx) {
+    var div = document.createElement('div');
+    div.className = 'spec-section';
+    // Extract section number if present
+    var numMatch = sec.title.match(/^(\d+\.)/);
+    var num = numMatch ? numMatch[1] : '';
+    var titleText = num ? sec.title.replace(/^\d+\.\s*/, '') : sec.title;
+
+    div.innerHTML =
+      '<div class="spec-section-header">' +
+        '<div style="display:flex;align-items:center;gap:0.75rem;flex:1;min-width:0">' +
+          (num ? '<span class="spec-section-num">' + num + '</span>' : '') +
+          '<span class="spec-section-title">' + titleText + '</span>' +
+        '</div>' +
+        '<span class="spec-chevron">&#9662;</span>' +
+      '</div>' +
+      '<div class="spec-section-body">' + mdToHtml(sec.body) + '</div>';
+
+    div.querySelector('.spec-section-header').addEventListener('click', function() {
+      div.classList.toggle('open');
+    });
+
+    // Open first 3 sections by default
+    if (idx < 3) div.classList.add('open');
+
+    $specSections.appendChild(div);
+    sectionEls.push(div);
+  });
+
+  document.getElementById('specExpandAll').addEventListener('click', function() {
+    sectionEls.forEach(function(el) { el.classList.add('open'); });
+  });
+
+  document.getElementById('specCollapseAll').addEventListener('click', function() {
+    sectionEls.forEach(function(el) { el.classList.remove('open'); });
+  });
+})();
+</script>
+</body>
+</html>
