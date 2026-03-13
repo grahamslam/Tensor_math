@@ -2,7 +2,9 @@
 
 A self-contained tensor algebra calculator that treats every value — from plain integers to Christoffel symbols — as a typed tensor object. Built on the **Tensor Language Specification (TLS) v0.2**.
 
-Open `index.html` in a browser. No build step, no dependencies.
+[![Launch Calculator](https://img.shields.io/badge/Launch_Calculator-▶-blue?style=for-the-badge)](https://grahamslam.github.io/Tensor_math/)
+
+No build step, no dependencies.
 
 ## What it does
 
