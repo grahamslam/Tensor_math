@@ -15,6 +15,8 @@ Open `index.html` in a browser. No build step, no dependencies.
 | `contract(T[a+,b-], v[b+])` | `[17, 39][a+]` | Index-aware contraction by label |
 | `christoffel(g, dg)` | `{T^0_{11}=...}` | Christoffel symbols from metric |
 | `riemann(g, dg, ddg)` | Riemann, Ricci, R, K | Full curvature pipeline |
+| `einsum('a+b-,b+c- -> a+c-', A, B)` | `[[19,22],[43,50]]` | Einstein summation convention |
+| `covariantD(0, V, gamma, dV)` | `[0, 0.577]` | Covariant derivative with Γ correction |
 
 ## Features
 
@@ -33,6 +35,8 @@ Open `index.html` in a browser. No build step, no dependencies.
 - `t3(a,b;c,d|e,f;g,h)` — rank-3 tensor literals (pipe-separated slabs)
 - `christoffel(g, dg)` — Christoffel symbols from metric + first derivatives
 - `riemann(g, dg, ddg)` — Riemann tensor, Ricci tensor, scalar curvature, Gaussian curvature (2D)
+- `covariantD(mu, T, gamma, partialT)` — covariant derivative ∇_μ T with Christoffel corrections
+- `revar(T, '--')` — relabel index variance without changing components (e.g., mark metric as covariant)
 
 **Indexed notation (TLS-native)**
 - `T[a+, b-]` — attach typed index labels to any tensor
@@ -40,6 +44,12 @@ Open `index.html` in a browser. No build step, no dependencies.
 - `contract(A[a+, a-])` — self-contraction (trace) by repeated label
 - Free/bound index tracking with variance and space validation
 - Strict-mode rejection of ambiguous implicit contractions in `*`
+
+**Einstein summation convention**
+- `einsum('a+b-, b+c- -> a+c-', A, B)` — variance-aware equation with automatic contraction
+- Repeated indices with opposite variance are summed over automatically
+- Output index order controlled by the `->` clause
+- Validates rank match, variance compatibility, and dimension agreement
 
 **Basis/representation split**
 - `basis e for V` — declare a basis for a space (REPL)
@@ -74,6 +84,14 @@ christoffel(m(1,0;0,0.75), t3(0,0;0,0.866|0,0;0,0))
 
 riemann(m(1,0;0,0.75), t3(0,0;0,0.866|0,0;0,0), t3(0,0;0,-1|0,0;0,0|0,0;0,0|0,0;0,0))
 # => R=2, K=1 (unit sphere)
+
+# Metric compatibility: ∇g = 0 (covariant metric needs revar to set [-,-])
+covariantD(0, revar(m(1,0;0,0.75), '--'), christoffel(m(1,0;0,0.75), t3(0,0;0,0.866|0,0;0,0)), revar(m(0,0;0,0.866), '--'))
+# => [[0, 0], [0, 0]] (metric compatibility verified)
+
+# Covariant derivative of φ-direction vector along θ
+covariantD(0, v(0,1), christoffel(m(1,0;0,0.75), t3(0,0;0,0.866|0,0;0,0)), v(0,0))
+# => [0, 0.577] (Γ¹₀₁ correction)
 ```
 
 ## Project structure
@@ -97,7 +115,7 @@ The calculator implements most of **TLS-Core** and **TLS-Geom**:
 
 It also reaches into **TLS-Calc** territory with Christoffel symbols and Riemann curvature.
 
-Not yet implemented: Einstein summation convention, covariant derivatives, change-of-basis transformations.
+Not yet implemented: change-of-basis transformations.
 
 ## License
 

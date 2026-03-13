@@ -292,6 +292,7 @@ body::before {
 
 .level-color-6 { --level-accent: #a0b87e; }
 .level-color-7 { --level-accent: #8eb8b8; }
+.level-color-8 { --level-accent: #b8b07e; }
 
 .level-color-1 .example-btn:hover { border-color: #7eb8a0; }
 .level-color-2 .example-btn:hover { border-color: #b8a07e; }
@@ -300,6 +301,7 @@ body::before {
 .level-color-5 .example-btn:hover { border-color: #c47e6a; }
 .level-color-6 .example-btn:hover { border-color: #a0b87e; }
 .level-color-7 .example-btn:hover { border-color: #8eb8b8; }
+.level-color-8 .example-btn:hover { border-color: #b8b07e; }
 
 /* ─── Syntax hint ─── */
 .syntax-hint {
@@ -3197,6 +3199,180 @@ function fnRiemann(g, dg, ddg, pos) {
   };
 }
 
+// ─── GR: Covariant derivative ───
+// covariantD(mu, T, gamma, partialT)
+//   mu: scalar integer — direction index (0-based)
+//   T: the tensor being differentiated
+//   gamma: rank-3 Christoffel tensor (from christoffel())
+//   partialT: partial derivative ∂_μ T — same rank/shape as T
+//
+// For each contravariant (+) index: adds +Γ correction
+// For each covariant (−) index: adds −Γ correction
+//
+// Rank-0: ∇_μ f = ∂_μ f
+// Rank-1: ∇_μ V^ν = ∂_μ V^ν + Γ^ν_{μλ} V^λ  (contra)
+//         ∇_μ W_ν = ∂_μ W_ν − Γ^λ_{μν} W_λ  (co)
+// Rank-2: one Γ correction per index slot
+
+function fnCovariantD(args, pos, logs) {
+  if (args.length !== 4)
+    throw TypeError_('covariantD() requires 4 arguments: (mu, tensor, gamma, partialT). Got ' + args.length + '.', pos);
+
+  var muTensor = args[0], tensor = args[1], gamma = args[2], partialT = args[3];
+
+  // Validate mu
+  if (muTensor.rank !== 0) throw TypeError_('covariantD() first argument mu must be a scalar (direction index), got rank-' + muTensor.rank + '.', pos);
+  var mu = Math.round(muTensor.value);
+
+  // Validate gamma
+  if (gamma.kind !== 'tensor3')
+    throw TypeError_('covariantD() third argument must be a rank-3 Christoffel tensor, got ' + gamma.kind + '.', pos);
+  var G = gamma.value; // G[l][i][j] = Γ^l_{ij}
+  var n = G.length;     // dimension
+
+  if (mu < 0 || mu >= n)
+    throw TypeError_('covariantD() direction index mu=' + mu + ' out of range for ' + n + 'D space.', pos);
+
+  // Validate partialT has same rank as tensor
+  if (tensor.rank !== partialT.rank)
+    throw TypeError_('covariantD() partialT (arg 4) must have same rank as tensor (arg 2). Got rank-' + partialT.rank + ' vs rank-' + tensor.rank + '.', pos);
+
+  logs.push('\u2207_' + mu + ' of ' + tensorTypeString(tensor) + ' with value ' + tensor.display + '.');
+
+  // ── Rank 0: scalar ──
+  if (tensor.rank === 0) {
+    logs.push('Scalar covariant derivative = partial derivative. No Christoffel correction.');
+    return partialT;
+  }
+
+  // ── Rank 1: vector or covector ──
+  if (tensor.rank === 1) {
+    var result = [];
+    var variance = tensor.variances[0];
+    var sign = variance === '+' ? 1 : -1;
+    var corrName = variance === '+' ? '\u0393^\u03bd_{\u03bc\u03bb} V^\u03bb' : '\u0393^\u03bb_{\u03bc\u03bd} V_\u03bb';
+
+    for (var nu = 0; nu < n; nu++) {
+      var correction = 0;
+      for (var lam = 0; lam < n; lam++) {
+        if (variance === '+') {
+          // Contravariant: +Γ^ν_{μλ} V^λ
+          correction += G[nu][mu][lam] * tensor.value[lam];
+        } else {
+          // Covariant: −Γ^λ_{μν} V_λ
+          correction += G[lam][mu][nu] * tensor.value[lam];
+        }
+      }
+      result.push(partialT.value[nu] + sign * correction);
+    }
+
+    var sp = tensor.spaces ? tensor.spaces[0] : 'V';
+    var out = variance === '+' ? vector(result, sp) : covector(result, sp);
+    logs.push('Christoffel correction (' + (sign > 0 ? '+' : '\u2212') + corrName + ') applied.');
+    logs.push('Result of \u2207_' + mu + ' \u21d2 ' + tensorTypeString(out) + ' with value ' + out.display + '.');
+    return out;
+  }
+
+  // ── Rank 2: tensor2 ──
+  if (tensor.rank === 2) {
+    var rows = tensor.value.length, cols = tensor.value[0].length;
+    // Start from partial derivative
+    var result = [];
+    for (var i = 0; i < rows; i++) {
+      result.push(partialT.value[i].slice());
+    }
+
+    var corrTerms = [];
+
+    // First index correction
+    var v0 = tensor.variances[0];
+    var s0 = v0 === '+' ? 1 : -1;
+    for (var a = 0; a < rows; a++) {
+      for (var b = 0; b < cols; b++) {
+        var corr = 0;
+        for (var lam = 0; lam < n; lam++) {
+          if (v0 === '+') {
+            // +Γ^a_{μλ} T^{λb}
+            corr += G[a][mu][lam] * tensor.value[lam][b];
+          } else {
+            // −Γ^λ_{μa} T_{λb}
+            corr += G[lam][mu][a] * tensor.value[lam][b];
+          }
+        }
+        result[a][b] += s0 * corr;
+      }
+    }
+    corrTerms.push((s0 > 0 ? '+' : '\u2212') + '\u0393 on slot 0 (' + v0 + ')');
+
+    // Second index correction
+    var v1 = tensor.variances[1];
+    var s1 = v1 === '+' ? 1 : -1;
+    for (var a = 0; a < rows; a++) {
+      for (var b = 0; b < cols; b++) {
+        var corr = 0;
+        for (var lam = 0; lam < n; lam++) {
+          if (v1 === '+') {
+            // +Γ^b_{μλ} T^{aλ}
+            corr += G[b][mu][lam] * tensor.value[a][lam];
+          } else {
+            // −Γ^λ_{μb} T_{aλ}
+            corr += G[lam][mu][b] * tensor.value[a][lam];
+          }
+        }
+        result[a][b] += s1 * corr;
+      }
+    }
+    corrTerms.push((s1 > 0 ? '+' : '\u2212') + '\u0393 on slot 1 (' + v1 + ')');
+
+    var sp = tensor.spaces || ['V', 'V*'];
+    var va = tensor.variances;
+    var out = tensor2(result, sp, va);
+    logs.push('Christoffel corrections: ' + corrTerms.join(', ') + '.');
+    logs.push('Result of \u2207_' + mu + ' \u21d2 ' + tensorTypeString(out) + ' with value ' + out.display + '.');
+    return out;
+  }
+
+  throw TypeError_('covariantD() not yet supported for rank-' + tensor.rank + ' tensors. Supports rank 0, 1, 2.', pos);
+}
+
+// ─── Variance relabeling ───
+// revar(tensor, varianceStr) — relabel index variances without changing components
+// varianceStr: e.g. "--" for both covariant, "++" for both contravariant, "+-" for mixed
+// This is a LABELING operation, not raise/lower. Use when you know the component
+// values already correspond to a specific variance (e.g., metric g_{ij} should be "--").
+function fnRevar(tensor, varStr, pos) {
+  if (typeof varStr === 'object' && varStr.rank === 0) {
+    throw TypeError_("revar() second argument must be a variance string like '--' or '+-', not a number.", pos);
+  }
+  var variances = [];
+  for (var i = 0; i < varStr.length; i++) {
+    if (varStr[i] === '+') variances.push('+');
+    else if (varStr[i] === '-') variances.push('-');
+    else throw TypeError_("revar() variance string must contain only '+' and '-'. Got '" + varStr[i] + "'.", pos);
+  }
+  if (variances.length !== tensor.rank)
+    throw TypeError_('revar() variance string length (' + variances.length + ') must match tensor rank (' + tensor.rank + ').', pos);
+
+  var spaces = [];
+  for (var i = 0; i < variances.length; i++) {
+    var baseSp = (tensor.spaces && tensor.spaces[i]) ? tensor.spaces[i].replace(/\*$/, '') : 'V';
+    spaces.push(variances[i] === '-' ? baseSp + '*' : baseSp);
+  }
+
+  if (tensor.rank === 1) {
+    return variances[0] === '+' ? vector(tensor.value.slice(), spaces[0]) : covector(tensor.value.slice(), spaces[0]);
+  }
+  if (tensor.rank === 2) {
+    var data = tensor.value.map(function(row) { return row.slice(); });
+    return tensor2(data, spaces, variances);
+  }
+  if (tensor.rank === 3) {
+    var data = tensor.value.map(function(slab) { return slab.map(function(row) { return row.slice(); }); });
+    return tensor3(data, spaces, variances);
+  }
+  throw TypeError_('revar() supports rank 1, 2, and 3 tensors. Got rank-' + tensor.rank + '.', pos);
+}
+
 var builtinFunctions = {
   trace: fnTrace,
   transpose: fnTranspose,
@@ -3219,7 +3395,7 @@ var threeArgFunctions = {
   riemann: fnRiemann
 };
 
-var varArgFunctions = { contract: true, components: true };
+var varArgFunctions = { contract: true, components: true, einsum: true, covariantD: true, revar: true };
 
 // ─── Lexer ───
 function lex(input) {
@@ -3228,6 +3404,14 @@ function lex(input) {
   while (i < input.length) {
     var ch = input[i];
     if (/\s/.test(ch)) { i++; continue; }
+    // String literals (for einsum equations)
+    if (ch === '"' || ch === "'") {
+      var quote = ch, start = i; i++;
+      while (i < input.length && input[i] !== quote) i++;
+      if (i >= input.length) throw ParseError('Unterminated string literal', start);
+      tokens.push({ type: 'string', value: input.slice(start + 1, i), pos: start });
+      i++; continue;
+    }
     // Numbers (but NOT negative — unary minus is handled by parser)
     if (/[0-9]/.test(ch) || (ch === '.' && /[0-9]/.test(input[i+1] || ''))) {
       var start = i; i++;
@@ -3357,6 +3541,10 @@ Parser.prototype.parseUnary = function() {
 Parser.prototype.parsePrimary = function() {
   var t = this.current();
   var node;
+  if (t.type === 'string') {
+    this.advance();
+    return { type: 'StringLiteral', value: t.value, pos: t.pos };
+  }
   if (t.type === 'number') {
     this.advance();
     node = { type: 'TensorLiteral', raw: t.value, tensor: scalar(Number(t.value)), pos: t.pos };
@@ -3531,6 +3719,7 @@ function astToString(node) {
     var slotStr = node.slots.map(function(s){ return s.label + s.variance; }).join(', ');
     return astToString(node.base) + '[' + slotStr + ']';
   }
+  if (node.type === 'StringLiteral') return '"' + node.value + '"';
   if (node.type === 'FuncCall') return node.name + '(' + node.args.map(function(a){ return astToString(a); }).join(', ') + ')';
   if (node.type === 'WhereExpr') {
     var binds = node.bindings.map(function(b){ return 'let ' + b.name + ' = ' + astToString(b.expr); }).join('; ');
@@ -3540,6 +3729,7 @@ function astToString(node) {
 }
 
 function astToTensorExpr(node, env) {
+  if (node.type === 'StringLiteral') return '"' + node.value + '"';
   if (node.type === 'TensorLiteral') return node.tensor.display;
   if (node.type === 'VarRef') {
     if (env && env.variables && env.variables[node.name]) return env.variables[node.name].display;
@@ -3563,6 +3753,269 @@ function explainBinary(op) {
 }
 
 // ─── Index-aware contraction ───
+// ─── Einstein Summation Convention ───
+
+// Parse an einsum equation string like "a+b-, b+c- -> a+c-"
+// Returns { inputs: [[{label, variance},...], ...], output: [{label, variance},...] }
+function parseEinsumEquation(eq, pos) {
+  var parts = eq.split('->');
+  if (parts.length !== 2) throw TypeError_("einsum equation must contain exactly one '->' separator.", pos);
+  var inputStr = parts[0].trim(), outputStr = parts[1].trim();
+
+  function parseSlotList(str) {
+    var slots = [];
+    var i = 0;
+    while (i < str.length) {
+      if (/\s/.test(str[i]) || str[i] === ',') { i++; continue; }
+      if (/[A-Za-z_]/.test(str[i])) {
+        var start = i; i++;
+        while (i < str.length && /[A-Za-z0-9_]/.test(str[i])) i++;
+        var label = str.slice(start, i);
+        // skip whitespace before +/-
+        while (i < str.length && /\s/.test(str[i])) i++;
+        if (i >= str.length || (str[i] !== '+' && str[i] !== '-'))
+          throw TypeError_("Expected '+' or '-' after index label '" + label + "' in einsum equation.", pos);
+        slots.push({ label: label, variance: str[i] });
+        i++;
+      } else {
+        throw TypeError_("Unexpected character '" + str[i] + "' in einsum equation.", pos);
+      }
+    }
+    return slots;
+  }
+
+  // Split input specs on whitespace-surrounded commas or double spaces (tensor boundaries)
+  // Format: "a+b-, b+c-" means tensor1 has slots [a+,b-], tensor2 has slots [b+,c-]
+  var inputGroups = inputStr.split(/\s*,\s*(?=[A-Za-z])/).reduce(function(groups, chunk) {
+    // Actually, the canonical delimiter between tensors is ' , ' (comma with surrounding space)
+    // but labels within a tensor are also comma-separated. The user's format uses
+    // "a+,b- , b+,c-" — spaces around the comma that separates tensors.
+    // We need a smarter split: look at the variance markers to group.
+    return groups;
+  }, []);
+
+  // Better approach: split on commas, then group by looking at the raw equation
+  // The format is: each index is "label+/-", groups separated by ", " (with surrounding whitespace)
+  // Strategy: parse all slots from input string, then assign to tensor groups based on
+  // the original comma pattern. A tensor boundary is signaled by extra spacing.
+  // Simplest reliable approach: use the equation structure. Each tensor's slots are
+  // separated by thin commas; tensor groups are separated by wide commas (space-comma-space).
+  // Actually let's use the user's convention: tensors are separated by " , " (space around comma)
+  // while slots within a tensor use tight commas or just adjacency.
+
+  // Re-parse: split inputStr by comma-then-space patterns, identifying tensor boundaries
+  // The user format: "a+b-, b+c-" — after variance marker, comma+space = tensor boundary
+  // Within a tensor: "a+b-" (adjacent) or "a+,b-" (tight comma)
+  // We split on the pattern: variance-marker followed by comma-space or comma-end
+  var tensorStrs = [];
+  var current = '';
+  for (var i = 0; i < inputStr.length; i++) {
+    if ((inputStr[i] === '+' || inputStr[i] === '-') && i + 1 < inputStr.length) {
+      current += inputStr[i];
+      // Look ahead: if next non-space is comma, and after that is space+letter, it's a tensor boundary
+      var j = i + 1;
+      while (j < inputStr.length && inputStr[j] === ' ') j++;
+      if (j < inputStr.length && inputStr[j] === ',') {
+        var k = j + 1;
+        while (k < inputStr.length && inputStr[k] === ' ') k++;
+        if (k < inputStr.length && /[A-Za-z_]/.test(inputStr[k])) {
+          // This comma separates tensors
+          tensorStrs.push(current.trim());
+          current = '';
+          i = k - 1; // will be incremented by loop
+          continue;
+        }
+      }
+    } else {
+      current += inputStr[i];
+    }
+  }
+  if (current.trim()) tensorStrs.push(current.trim());
+
+  var inputs = tensorStrs.map(function(s) { return parseSlotList(s); });
+  var output = parseSlotList(outputStr);
+
+  return { inputs: inputs, output: output };
+}
+
+// Permute a tensor's axes to a new order
+// order is an array of current axis indices, e.g. [1, 0] swaps axes of a rank-2 tensor
+function permuteTensor(tensor, order, newSpaces, newVariances, pos) {
+  if (tensor.rank === 0) return tensor;
+  if (order.length !== tensor.rank)
+    throw TypeError_('permute: order length (' + order.length + ') must match tensor rank (' + tensor.rank + ').', pos);
+
+  // Check if it's an identity permutation
+  var isIdentity = true;
+  for (var i = 0; i < order.length; i++) { if (order[i] !== i) { isIdentity = false; break; } }
+  if (isIdentity) return tensor;
+
+  if (tensor.rank === 1) return tensor; // rank-1 permutation is trivial
+
+  if (tensor.rank === 2) {
+    if (order[0] === 1 && order[1] === 0) {
+      // Transpose
+      var n = tensor.value.length, m = tensor.value[0].length;
+      var result = [];
+      for (var j = 0; j < m; j++) {
+        var row = [];
+        for (var i = 0; i < n; i++) row.push(tensor.value[i][j]);
+        result.push(row);
+      }
+      var sp = newSpaces || [tensor.spaces[1], tensor.spaces[0]];
+      var va = newVariances || [tensor.variances[1], tensor.variances[0]];
+      return tensor2(result, sp, va);
+    }
+  }
+
+  // General case for higher ranks — build via nested iteration
+  // For now, support rank-2 transposition and identity. Higher ranks can be added later.
+  throw TypeError_('permute: general permutation for rank-' + tensor.rank + ' tensors is not yet supported.', pos);
+}
+
+// Einstein summation: einsum("a+b-, b+c- -> a+c-", A, B)
+function fnEinsum(args, pos, logs) {
+  if (args.length < 2) throw TypeError_("einsum() requires at least an equation string and one tensor.", pos);
+  var eq = args[0];
+  if (typeof eq !== 'string')
+    throw TypeError_("einsum() first argument must be a string equation, got " + typeof eq + ".", pos);
+
+  var parsed = parseEinsumEquation(eq, pos);
+  var tensors = args.slice(1);
+
+  if (tensors.length !== parsed.inputs.length)
+    throw TypeError_("einsum: equation specifies " + parsed.inputs.length + " tensor(s) but got " + tensors.length + ".", pos);
+
+  logs.push('Einstein summation: "' + eq + '" with ' + tensors.length + ' tensor(s).');
+
+  // Wrap each tensor as indexed with its slot specification
+  var indexedTensors = [];
+  for (var ti = 0; ti < tensors.length; ti++) {
+    var t = tensors[ti];
+    var inputSlots = parsed.inputs[ti];
+    if (t.rank !== inputSlots.length)
+      throw TypeError_("einsum: tensor " + (ti + 1) + " has rank " + t.rank + " but equation specifies " + inputSlots.length + " indices.", pos);
+    // Validate variance compatibility
+    for (var si = 0; si < inputSlots.length; si++) {
+      if (t.variances && t.variances[si] && t.variances[si] !== inputSlots[si].variance) {
+        logs.push('Note: tensor ' + (ti + 1) + ' slot ' + si + ' has variance ' + t.variances[si] + ' but equation says ' + inputSlots[si].variance + '. Using equation variance.');
+      }
+    }
+    // Build slot objects with space info from tensor
+    var slots = inputSlots.map(function(s, idx) {
+      return { label: s.label, variance: s.variance, space: (t.spaces && t.spaces[idx]) || 'V' };
+    });
+    indexedTensors.push({
+      kind: 'indexed', tensor: t, slots: slots,
+      freeIndices: slots.map(function(s) { return s.label; }),
+      rank: t.rank, spaces: t.spaces, variances: t.variances,
+      value: t.value, display: t.display
+    });
+  }
+
+  // Find all labels that appear exactly twice across all tensors (summation indices)
+  var allLabels = {};
+  for (var ti = 0; ti < indexedTensors.length; ti++) {
+    var slots = indexedTensors[ti].slots;
+    for (var si = 0; si < slots.length; si++) {
+      var lbl = slots[si].label;
+      if (!allLabels[lbl]) allLabels[lbl] = [];
+      allLabels[lbl].push({ tensor: ti, slot: si, variance: slots[si].variance });
+    }
+  }
+
+  // Identify summation (bound) indices: appear exactly twice with opposite variance
+  var sumIndices = [];
+  var outputLabels = parsed.output.map(function(s) { return s.label; });
+  for (var lbl in allLabels) {
+    var occ = allLabels[lbl];
+    if (occ.length === 2) {
+      if (occ[0].variance === occ[1].variance)
+        throw new TLSError('VarianceError', "einsum: repeated index '" + lbl + "' has same variance '" + occ[0].variance + "' on both occurrences. Need opposite variance for contraction.", pos);
+      if (outputLabels.indexOf(lbl) === -1) {
+        sumIndices.push(lbl);
+      }
+    } else if (occ.length > 2) {
+      throw TypeError_("einsum: index '" + lbl + "' appears " + occ.length + " times (max 2 allowed).", pos);
+    }
+  }
+
+  logs.push('Summation indices: {' + (sumIndices.length ? sumIndices.join(', ') : 'none') + '}. Output indices: {' + outputLabels.join(', ') + '}.');
+
+  // Iteratively contract summation indices
+  // Strategy: combine all tensors into one by successive pairwise contractions
+  var result = indexedTensors[0];
+  for (var ti = 1; ti < indexedTensors.length; ti++) {
+    // Check for matching labels between result and next tensor
+    var next = indexedTensors[ti];
+    var hasMatch = false;
+    for (var ri = 0; ri < result.slots.length; ri++) {
+      for (var ni = 0; ni < next.slots.length; ni++) {
+        if (result.slots[ri].label === next.slots[ni].label && sumIndices.indexOf(result.slots[ri].label) !== -1) {
+          hasMatch = true; break;
+        }
+      }
+      if (hasMatch) break;
+    }
+    if (hasMatch) {
+      result = indexedContract(result, next, pos, logs);
+    } else {
+      // Tensor product (no shared summation labels) — use outer product
+      // For now, if they share no labels to contract, we have an issue
+      // unless they just need to be combined
+      throw TypeError_("einsum: tensors " + ti + " and " + (ti + 1) + " share no summation indices. Outer product not yet supported in einsum.", pos);
+    }
+  }
+
+  // Handle self-contraction case (single tensor, repeated indices)
+  if (indexedTensors.length === 1 && sumIndices.length > 0) {
+    result = indexedSelfContract(result, pos, logs);
+  }
+
+  // Unwrap the final result
+  var finalTensor = result.kind === 'indexed' ? result.tensor : result;
+  var finalSlots = result.kind === 'indexed' ? result.slots : [];
+
+  // Permute output to match requested output order if needed
+  if (parsed.output.length > 0 && finalSlots.length > 0 && finalSlots.length === parsed.output.length) {
+    // Build permutation: for each output slot, find its position in finalSlots
+    var perm = [];
+    var newSpaces = [], newVariances = [];
+    for (var oi = 0; oi < parsed.output.length; oi++) {
+      var found = false;
+      for (var fi = 0; fi < finalSlots.length; fi++) {
+        if (finalSlots[fi].label === parsed.output[oi].label) {
+          perm.push(fi);
+          newSpaces.push(finalSlots[fi].space);
+          newVariances.push(parsed.output[oi].variance);
+          found = true; break;
+        }
+      }
+      if (!found) throw TypeError_("einsum: output index '" + parsed.output[oi].label + "' not found in result.", pos);
+    }
+    finalTensor = permuteTensor(finalTensor, perm, newSpaces, newVariances, pos);
+  }
+
+  var outStr = parsed.output.map(function(s) { return s.label + s.variance; }).join(', ');
+  logs.push('einsum result \u21d2 ' + tensorTypeString(finalTensor) + ' with value ' + finalTensor.display + (outStr ? ' [' + outStr + ']' : '') + '.');
+
+  // If there are output indices, wrap as indexed
+  if (parsed.output.length > 0) {
+    var outSlots = parsed.output.map(function(s, idx) {
+      return { label: s.label, variance: s.variance, space: (finalTensor.spaces && finalTensor.spaces[idx]) || 'V' };
+    });
+    return {
+      kind: 'indexed', tensor: finalTensor, slots: outSlots,
+      freeIndices: outSlots.map(function(s) { return s.label; }),
+      rank: finalTensor.rank, spaces: finalTensor.spaces, variances: finalTensor.variances,
+      value: finalTensor.value,
+      display: finalTensor.display + '[' + outStr + ']',
+      explanation: 'Einstein summation result with free indices: {' + outStr + '}'
+    };
+  }
+  return finalTensor;
+}
+
 function indexedContract(a, b, pos, logs) {
   // Find matching label pairs between a.slots and b.slots
   var aSlots = a.slots, bSlots = b.slots;
@@ -3835,6 +4288,48 @@ function evaluateAST(node, logs, env) {
         explanation: 'Components of tensor relative to basis ' + basisName + '. The component array is a representation, not the tensor itself.'
       };
       return result;
+    }
+
+    // Einstein summation convention
+    if (node.name === 'einsum') {
+      if (node.args.length < 2) throw TypeError_("einsum() requires at least an equation string and one tensor.", node.pos);
+      // First arg must be a string literal
+      var eqNode = node.args[0];
+      if (eqNode.type !== 'StringLiteral')
+        throw TypeError_("einsum() first argument must be a quoted string equation.", node.pos);
+      var eqStr = eqNode.value;
+      // Evaluate the tensor arguments
+      var tensorArgs = [];
+      for (var ai = 1; ai < node.args.length; ai++) {
+        var val = evaluateAST(node.args[ai], logs, env);
+        tensorArgs.push(val.kind === 'indexed' ? val.tensor : val);
+      }
+      var allArgs = [eqStr].concat(tensorArgs);
+      return fnEinsum(allArgs, node.pos, logs);
+    }
+
+    // Variance relabeling
+    if (node.name === 'revar') {
+      if (node.args.length !== 2) throw TypeError_("revar() requires 2 arguments: (tensor, varianceString).", node.pos);
+      var t = evaluateAST(node.args[0], logs, env);
+      var varNode = node.args[1];
+      if (varNode.type !== 'StringLiteral')
+        throw TypeError_("revar() second argument must be a quoted string like '--' or '+-'.", node.pos);
+      var tensor = t.kind === 'indexed' ? t.tensor : t;
+      logs.push('Relabel variance of ' + tensor.display + ' to ' + varNode.value + '.');
+      var result = fnRevar(tensor, varNode.value, node.pos);
+      logs.push('Result \u21d2 ' + tensorTypeString(result) + ' with value ' + result.display + '.');
+      return result;
+    }
+
+    // Covariant derivative
+    if (node.name === 'covariantD') {
+      var evalArgs = [];
+      for (var ai = 0; ai < node.args.length; ai++) {
+        var val = evaluateAST(node.args[ai], logs, env);
+        evalArgs.push(val.kind === 'indexed' ? val.tensor : val);
+      }
+      return fnCovariantD(evalArgs, node.pos, logs);
     }
 
     // Three-argument functions (riemann)
@@ -4282,6 +4777,16 @@ var exampleLevels = [
     ]
   },
   {
+    title: 'Einstein Summation (einsum)',
+    color: 8,
+    open: false,
+    items: [
+      { label: 'einsum matrix multiply', input: "einsum('a+b-, b+c- -> a+c-', m(1,2;3,4), m(5,6;7,8))", tip: 'Matrix product via Einstein convention \u2014 contracts over shared index b' },
+      { label: 'einsum covector\u00b7vector', input: "einsum('a-, a+ ->', cv(1,2), v(3,4))", tip: 'Inner product: covector contracts with vector \u2192 scalar' },
+      { label: 'einsum matrix\u00b7vector', input: "einsum('i+j-, j+ -> i+', m(1,0;0,2), v(3,4))", tip: 'Matrix-vector multiply with explicit index control' },
+    ]
+  },
+  {
     title: 'General Relativity',
     color: 6,
     open: false,
@@ -4290,6 +4795,8 @@ var exampleLevels = [
       { label: 'christoffel(m(1,0;0,0.75), t3(0,0;0,0.866|0,0;0,0))', input: 'christoffel(m(1,0;0,0.75), t3(0,0;0,0.866|0,0;0,0))', tip: 'Christoffel symbols for sphere at \u03b8=\u03c0/3: \u0393 from metric + derivatives' },
       { label: 'christoffel(m(1,0;0,1), t3(0,0;0,0|0,0;0,0))', input: 'christoffel(m(1,0;0,1), t3(0,0;0,0|0,0;0,0))', tip: 'Flat Euclidean metric \u2014 all Christoffel symbols vanish' },
       { label: 'riemann (sphere R=2)', input: 'riemann(m(1,0;0,0.75), t3(0,0;0,0.866|0,0;0,0), t3(0,0;0,-1|0,0;0,0|0,0;0,0|0,0;0,0))', tip: 'Unit sphere at \u03b8=\u03c0/3: Riemann, Ricci, scalar curvature R=2, Gaussian K=1' },
+      { label: '\u2207_\u03b8 g = 0 (metric compat.)', input: "covariantD(0, revar(m(1,0;0,0.75), '--'), christoffel(m(1,0;0,0.75), t3(0,0;0,0.866|0,0;0,0)), revar(m(0,0;0,0.866), '--'))", tip: 'Metric compatibility: \u2207g = 0 \u2014 Christoffel corrections exactly cancel partial derivatives' },
+      { label: '\u2207_\u03b8 V (vector on sphere)', input: 'covariantD(0, v(0,1), christoffel(m(1,0;0,0.75), t3(0,0;0,0.866|0,0;0,0)), v(0,0))', tip: 'Covariant derivative of \u03c6-direction vector along \u03b8 \u2014 Christoffel correction \u0393\u00b9\u2080\u2081 = 0.577' },
     ]
   }
 ];
@@ -4307,6 +4814,8 @@ var strictRules = [
   "tensor and metric declarations establish type constraints validated on binding.",
   "christoffel(g, dg) computes \u0393^l_ij from a metric and its rank-3 derivative tensor.",
   "riemann(g, dg, ddg) computes full Riemann curvature, Ricci tensor, and scalar curvature R.",
+  "einsum('eq', T1, T2, ...) performs Einstein summation: automatic contraction on repeated indices with variance validation.",
+  "covariantD(mu, T, gamma, partialT) computes \u2207_\u03bc T with Christoffel corrections for each index slot.",
 ];
 
 var educationalRules = [
