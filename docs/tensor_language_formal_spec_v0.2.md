@@ -1212,6 +1212,58 @@ Adds:
 - covariant differentiation
 - Lie derivatives
 
+### TLS-Graph
+Adds graph theory and Ramsey theory operations on adjacency tensors:
+
+#### 17.4.1 Graph Construction
+
+| Operation | Signature | Preconditions | Returns |
+|-----------|-----------|---------------|---------|
+| `adjacency(n)` | `adjacency : Tensor<> -> Tensor<V+,V->` | `n` is a positive integer scalar, 2 ≤ n ≤ 50 | Adjacency matrix of K_n (complete graph): all 1s with 0 diagonal |
+| `paley(p)` | `paley : Tensor<> -> Tensor<V+,V->` | `p` is prime, p ≥ 5, p ≡ 1 (mod 4) | Paley graph: vertices = Z_p, edge iff (u-v) is a quadratic residue mod p. Self-complementary, vertex-transitive. |
+| `circulant(n, S)` | `circulant : (Tensor<>, Tensor<V+>) -> Tensor<V+,V->` | `n` is a positive integer, `S` is a vector of integer differences | Circulant graph: edge (u,v) iff \|u-v\| mod n is in S (symmetric closure applied automatically) |
+| `complement(A)` | `complement : Tensor<V+,V-> -> Tensor<V+,V->` | `A` is a square rank-2 tensor with 0/1 entries | Complement graph: off-diagonal entries flipped (0↔1) |
+
+#### 17.4.2 Graph Analysis
+
+| Operation | Signature | Preconditions | Returns |
+|-----------|-----------|---------------|---------|
+| `degree(A)` | `degree : Tensor<V+,V-> -> Tensor<V+>` | `A` is a square rank-2 tensor | Vector of row sums (degree sequence) |
+| `triangles(A)` | `triangles : Tensor<V+,V-> -> Tensor<>` | `A` is a square rank-2 tensor | Number of triangles via trace(A³)/6 |
+| `cliques(A, k)` | `cliques : (Tensor<V+,V->, Tensor<>) -> Tensor<>` | `A` is square rank-2, `k` is integer scalar 2 ≤ k ≤ 10 | Number of complete k-subgraphs (exhaustive enumeration) |
+| `independent_set(A, k)` | `independent_set : (Tensor<V+,V->, Tensor<>) -> Tensor<>` | `A` is square rank-2, `k` is integer scalar 1 ≤ k ≤ 15 | Number of independent sets of size k (no edges between any pair) |
+| `chromatic(A)` | `chromatic : Tensor<V+,V-> -> Tensor<>` | `A` is a square rank-2 tensor with 0/1 entries | Edge color counts: red (1) and blue (0) with totals |
+| `hadamard(A, B)` | `hadamard : (Tensor<V+,V->, Tensor<V+,V->) -> Tensor<V+,V->` | Same dimensions | Element-wise (Hadamard) product |
+
+#### 17.4.3 Ramsey Theory
+
+| Operation | Signature | Preconditions | Returns |
+|-----------|-----------|---------------|---------|
+| `ramsey_check(A, s, t)` | `ramsey_check : (Tensor<V+,V->, Tensor<>, Tensor<>) -> Tensor<>` | `A` is square rank-2 with 0/1 entries, `s` and `t` are positive integer scalars | 1 if coloring contains monochromatic red K_s or blue K_t, 0 if Ramsey-avoiding. Explanation includes which clique was found. |
+| `ramsey_search(n, s, t)` | `ramsey_search : (Tensor<>, Tensor<>, Tensor<>) -> Tensor<V+,V->` | All scalars, 2 ≤ n ≤ 20 | Random search for R(s,t)-avoiding coloring of K_n. Returns adjacency matrix if found, 0 if no avoiding coloring found in up to 10,000 trials. |
+| `ramsey_energy(A, r, s)` | `ramsey_energy : (Tensor<V+,V->, Tensor<>, Tensor<>) -> Tensor<>` | `A` is square rank-2, `r` and `s` are positive integer scalars | Ramsey energy E = count(K_r in A) + count(I_s in complement(A)). An energy of 0 means the coloring is R(r,s)-avoiding. |
+| `ramsey_anneal(n, r, s [, trials])` | `ramsey_anneal : (Tensor<>, Tensor<>, Tensor<> [, Tensor<>]) -> Tensor<V+,V->` | All scalars, 3 ≤ n ≤ 30, optional trials (default 3, max 20) | Simulated annealing search for R(r,s)-avoiding coloring of K_n. Minimizes ramsey_energy via Metropolis criterion with geometric cooling. Returns best coloring found. |
+
+#### 17.4.4 Tensor–Graph Connection
+
+Graphs are encoded as rank-2 tensors (adjacency matrices) with natural tensor operations:
+
+- **Contraction** (`A @ A`): Matrix power A² counts paths of length 2 between vertices
+- **Trace** (`trace(A @ A @ A) / 6`): Triangle count via closed walks
+- **Eigenvalues** (`eigenvalues(A)`): Graph spectrum — algebraic connectivity, spectral gap
+- **Hadamard product**: Mask operations for subgraph extraction and color filtering
+- **Complement**: Edge-color inversion for Ramsey 2-coloring analysis
+
+This connection enables applying the full TLS tensor algebra (contraction, decomposition, spectral analysis) to combinatorial graph problems.
+
+#### 17.4.5 Algebraic Graph Constructions
+
+Paley graphs and circulant graphs are the two dominant initialization strategies in computational Ramsey theory (see Nagda et al., "Reinforced Generation of Combinatorial Structures: Ramsey Numbers," arXiv:2603.09172, March 2026). TLS-Graph provides both as first-class tensor constructors:
+
+- **Paley graphs** (`paley(p)`): Vertices are elements of the finite field Z_p. Edges connect vertices whose difference is a quadratic residue mod p. Self-complementary and vertex-transitive — optimal starting points for symmetric Ramsey constructions.
+- **Circulant graphs** (`circulant(n, S)`): Edges defined by a difference set S, where (u,v) is an edge iff |u-v| mod n is in S. Captures cyclic symmetry, enabling orbit-based search space reduction.
+- **Simulated annealing** (`ramsey_anneal(n, r, s)`): Stochastic local search minimizing the Ramsey energy function E(G) = count(K_r) + count(I_s) via Metropolis criterion. The fundamental search primitive used by virtually all computational Ramsey results.
+
 ---
 
 ## 18. EBNF Grammar

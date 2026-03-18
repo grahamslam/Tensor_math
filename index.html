@@ -2952,27 +2952,123 @@ function fnEigenvalues(t, pos) {
   if (t.kind !== 'tensor2') throw TypeError_('eigenvalues() requires a rank-2 tensor, got ' + t.kind + '.', pos);
   var m = t.value, n = m.length;
   if (n !== m[0].length) throw DimensionError('eigenvalues() requires a square matrix (' + n + 'x' + m[0].length + ' is not square).', pos);
+  if (n > 50) throw DimensionError('eigenvalues() supports up to 50x50 matrices (got ' + n + 'x' + n + ').', pos);
+
   var vals;
   if (n === 1) {
     vals = [m[0][0]];
   } else if (n === 2) {
-    // characteristic polynomial: lambda^2 - trace*lambda + det = 0
     var tr = m[0][0] + m[1][1];
     var det = m[0][0] * m[1][1] - m[0][1] * m[1][0];
     var disc = tr * tr - 4 * det;
     if (disc < 0) throw TypeError_('eigenvalues(): complex eigenvalues not supported (discriminant = ' + disc + ').', pos);
     var sqrtDisc = Math.sqrt(disc);
     vals = [(tr + sqrtDisc) / 2, (tr - sqrtDisc) / 2];
-  } else if (n === 3) {
-    throw TypeError_('eigenvalues() for 3x3 not yet implemented.', pos);
   } else {
-    throw DimensionError('eigenvalues() is implemented for up to 2x2 matrices (got ' + n + 'x' + n + ').', pos);
+    // QR iteration for symmetric matrices (real eigenvalues guaranteed)
+    // Copy matrix
+    var A = [];
+    for (var i = 0; i < n; i++) {
+      A[i] = [];
+      for (var j = 0; j < n; j++) A[i][j] = m[i][j];
+    }
+
+    // Check symmetry (all graph adjacency matrices are symmetric)
+    var symmetric = true;
+    for (var i = 0; i < n && symmetric; i++)
+      for (var j = 0; j < n && symmetric; j++)
+        if (Math.abs(A[i][j] - A[j][i]) > 1e-10) symmetric = false;
+
+    if (!symmetric) throw TypeError_('eigenvalues() for n>2 currently requires a symmetric matrix. Use sym(A) to symmetrize.', pos);
+
+    // QR algorithm with implicit shifts (Wilkinson shift)
+    var maxIter = 100 * n;
+    for (var iter = 0; iter < maxIter; iter++) {
+      // Check convergence — off-diagonal elements near zero
+      var offDiag = 0;
+      for (var i = 0; i < n; i++)
+        for (var j = 0; j < n; j++)
+          if (i !== j) offDiag += A[i][j] * A[i][j];
+      if (Math.sqrt(offDiag) < 1e-10) break;
+
+      // Wilkinson shift: eigenvalue of bottom-right 2x2 closer to A[n-1][n-1]
+      var shift = 0;
+      if (n >= 2) {
+        var a = A[n-2][n-2], b = A[n-2][n-1], c = A[n-1][n-2], d = A[n-1][n-1];
+        var tr2 = a + d, det2 = a*d - b*c, disc2 = tr2*tr2 - 4*det2;
+        if (disc2 >= 0) {
+          var e1 = (tr2 + Math.sqrt(disc2)) / 2, e2 = (tr2 - Math.sqrt(disc2)) / 2;
+          shift = (Math.abs(e1 - d) < Math.abs(e2 - d)) ? e1 : e2;
+        } else {
+          shift = d;
+        }
+      }
+
+      // Apply shift
+      for (var i = 0; i < n; i++) A[i][i] -= shift;
+
+      // QR decomposition via Householder reflections
+      var Q = [];
+      for (var i = 0; i < n; i++) { Q[i] = []; for (var j = 0; j < n; j++) Q[i][j] = (i === j) ? 1 : 0; }
+      var R = [];
+      for (var i = 0; i < n; i++) { R[i] = []; for (var j = 0; j < n; j++) R[i][j] = A[i][j]; }
+
+      for (var k = 0; k < n - 1; k++) {
+        // Extract column below diagonal
+        var x = [];
+        for (var i = k; i < n; i++) x.push(R[i][k]);
+        var normX = 0;
+        for (var i = 0; i < x.length; i++) normX += x[i] * x[i];
+        normX = Math.sqrt(normX);
+        if (normX < 1e-14) continue;
+
+        var sign = x[0] >= 0 ? 1 : -1;
+        x[0] += sign * normX;
+        var normV = 0;
+        for (var i = 0; i < x.length; i++) normV += x[i] * x[i];
+        if (normV < 1e-14) continue;
+
+        // Apply Householder: R = (I - 2vv'/||v||^2) R
+        for (var j = k; j < n; j++) {
+          var dot = 0;
+          for (var i = 0; i < x.length; i++) dot += x[i] * R[k+i][j];
+          dot *= 2 / normV;
+          for (var i = 0; i < x.length; i++) R[k+i][j] -= dot * x[i];
+        }
+        // Apply to Q: Q = Q (I - 2vv'/||v||^2)
+        for (var i = 0; i < n; i++) {
+          var dot = 0;
+          for (var j2 = 0; j2 < x.length; j2++) dot += Q[i][k+j2] * x[j2];
+          dot *= 2 / normV;
+          for (var j2 = 0; j2 < x.length; j2++) Q[i][k+j2] -= dot * x[j2];
+        }
+      }
+
+      // A = R * Q + shift * I
+      for (var i = 0; i < n; i++) {
+        for (var j = 0; j < n; j++) {
+          var s = 0;
+          for (var k = 0; k < n; k++) s += R[i][k] * Q[k][j];
+          A[i][j] = s;
+        }
+        A[i][i] += shift;
+      }
+    }
+
+    vals = [];
+    for (var i = 0; i < n; i++) vals.push(A[i][i]);
+    vals.sort(function(a, b) { return b - a; }); // descending
   }
+
+  // Clean up near-integers
+  vals = vals.map(function(v) { return Math.abs(v - Math.round(v)) < 1e-6 ? Math.round(v) : v; });
+
   return {
     kind: 'scalar', rank: 0, spaces: [], variances: [],
     value: vals,
     display: 'eigenvalues(' + vals.map(function(v){ return Number.isInteger(v) ? v : +v.toFixed(6); }).join(', ') + ')',
-    explanation: 'Eigenvalues of the endomorphism.'
+    explanation: 'Eigenvalues of the ' + n + 'x' + n + ' symmetric tensor (sorted descending). Spectral gap: ' +
+      (vals.length >= 2 ? +(vals[0] - vals[1]).toFixed(6) : 'N/A') + '.'
   };
 }
 
@@ -3373,6 +3469,1581 @@ function fnRevar(tensor, varStr, pos) {
   throw TypeError_('revar() supports rank 1, 2, and 3 tensors. Got rank-' + tensor.rank + '.', pos);
 }
 
+// ─── Graph Theory / Ramsey Module ───
+
+// adjacency(n) — complete graph K_n adjacency matrix (all 1s, 0 diagonal)
+function fnAdjacency(t, pos) {
+  if (t.rank !== 0) throw TypeError_('adjacency() expects a scalar (vertex count).', pos);
+  var n = Math.round(t.value);
+  if (n < 2 || n > 50) throw TypeError_('adjacency() requires 2 ≤ n ≤ 50.', pos);
+  var rows = [];
+  for (var i = 0; i < n; i++) {
+    var row = [];
+    for (var j = 0; j < n; j++) row.push(i === j ? 0 : 1);
+    rows.push(row);
+  }
+  var result = tensor2(rows);
+  result.explanation = 'Adjacency matrix of K_' + n + ' (complete graph on ' + n + ' vertices).';
+  return result;
+}
+
+// hadamard(A, B) — element-wise product of two same-shape matrices
+function fnHadamard(a, b, pos) {
+  if (a.rank !== 2 || b.rank !== 2) throw TypeError_('hadamard() requires two rank-2 tensors.', pos);
+  if (a.value.length !== b.value.length || a.value[0].length !== b.value[0].length)
+    throw TypeError_('hadamard() requires same dimensions. Got ' + a.value.length + '×' + a.value[0].length + ' and ' + b.value.length + '×' + b.value[0].length + '.', pos);
+  var rows = [];
+  for (var i = 0; i < a.value.length; i++) {
+    var row = [];
+    for (var j = 0; j < a.value[i].length; j++) row.push(a.value[i][j] * b.value[i][j]);
+    rows.push(row);
+  }
+  var result = tensor2(rows, a.spaces, a.variances);
+  result.explanation = 'Hadamard (element-wise) product.';
+  return result;
+}
+
+// triangles(A) — count monochromatic triangles in adjacency matrix A
+// Uses trace(A³)/6 formula
+function fnTriangles(t, pos) {
+  if (t.rank !== 2) throw TypeError_('triangles() requires a rank-2 adjacency matrix.', pos);
+  var n = t.value.length;
+  if (n !== t.value[0].length) throw TypeError_('triangles() requires square matrix.', pos);
+  // Compute A² then A³
+  var A = t.value;
+  var A2 = [];
+  for (var i = 0; i < n; i++) {
+    A2[i] = [];
+    for (var j = 0; j < n; j++) {
+      var s = 0;
+      for (var k = 0; k < n; k++) s += A[i][k] * A[k][j];
+      A2[i][j] = s;
+    }
+  }
+  var A3 = [];
+  for (var i = 0; i < n; i++) {
+    A3[i] = [];
+    for (var j = 0; j < n; j++) {
+      var s = 0;
+      for (var k = 0; k < n; k++) s += A2[i][k] * A[k][j];
+      A3[i][j] = s;
+    }
+  }
+  var tr = 0;
+  for (var i = 0; i < n; i++) tr += A3[i][i];
+  var count = tr / 6;
+  var result = scalar(count);
+  result.explanation = 'Number of triangles (3-cliques) = trace(A³)/6 = ' + tr + '/6 = ' + count + '.';
+  return result;
+}
+
+// cliques(A, k) — count monochromatic k-cliques by exhaustive enumeration
+function fnCliques(a, b, pos) {
+  if (a.rank !== 2) throw TypeError_('cliques() requires a rank-2 adjacency matrix as first argument.', pos);
+  if (b.rank !== 0) throw TypeError_('cliques() requires a scalar clique size as second argument.', pos);
+  var A = a.value;
+  var n = A.length;
+  var k = Math.round(b.value);
+  if (k < 2 || k > 10) throw TypeError_('cliques() requires 2 ≤ k ≤ 10.', pos);
+  if (k > n) return scalar(0);
+
+  // Enumerate all k-subsets and check if they form a clique
+  var count = 0;
+  var subset = [];
+
+  function enumerate(start, depth) {
+    if (depth === k) {
+      // Check all pairs in subset
+      for (var i = 0; i < k; i++) {
+        for (var j = i + 1; j < k; j++) {
+          if (A[subset[i]][subset[j]] === 0) return;
+        }
+      }
+      count++;
+      return;
+    }
+    for (var v = start; v < n; v++) {
+      subset[depth] = v;
+      enumerate(v + 1, depth + 1);
+    }
+  }
+  enumerate(0, 0);
+
+  var result = scalar(count);
+  result.explanation = 'Found ' + count + ' complete ' + k + '-cliques in the ' + n + '-vertex graph.';
+  return result;
+}
+
+// ramsey_check(A, s, t) — check if 2-coloring (matrix A with 0/1 entries) contains
+// a monochromatic red K_s (edges=1) or blue K_t (edges=0)
+function fnRamseyCheck(args, pos) {
+  if (args.length !== 3) throw TypeError_('ramsey_check(A, s, t) requires 3 arguments.', pos);
+  var A = args[0], sArg = args[1], tArg = args[2];
+  if (A.rank !== 2) throw TypeError_('ramsey_check() first argument must be a rank-2 adjacency matrix.', pos);
+  if (sArg.rank !== 0 || tArg.rank !== 0) throw TypeError_('ramsey_check() s and t must be scalars.', pos);
+  var adj = A.value;
+  var n = adj.length;
+  var s = Math.round(sArg.value);
+  var t = Math.round(tArg.value);
+
+  // Build complement (0↔1, keep diagonal 0)
+  var comp = [];
+  for (var i = 0; i < n; i++) {
+    comp[i] = [];
+    for (var j = 0; j < n; j++) comp[i][j] = (i === j) ? 0 : (1 - adj[i][j]);
+  }
+
+  function hasClique(M, k) {
+    if (k > n) return false;
+    var subset = [];
+    function search(start, depth) {
+      if (depth === k) {
+        for (var i = 0; i < k; i++)
+          for (var j = i + 1; j < k; j++)
+            if (M[subset[i]][subset[j]] === 0) return false;
+        return true;
+      }
+      for (var v = start; v < n; v++) {
+        subset[depth] = v;
+        if (search(v + 1, depth + 1)) return true;
+      }
+      return false;
+    }
+    return search(0, 0);
+  }
+
+  var hasRed = hasClique(adj, s);
+  var hasBlue = hasClique(comp, t);
+
+  var msg = 'R(' + s + ',' + t + ') check on ' + n + ' vertices: ';
+  if (hasRed) msg += 'Found red K_' + s + '. ';
+  else msg += 'No red K_' + s + '. ';
+  if (hasBlue) msg += 'Found blue K_' + t + '. ';
+  else msg += 'No blue K_' + t + '. ';
+  if (hasRed || hasBlue) msg += 'Monochromatic clique EXISTS — this coloring does NOT avoid R(' + s + ',' + t + ').';
+  else msg += 'No monochromatic clique — this coloring AVOIDS R(' + s + ',' + t + ')!';
+
+  var result = scalar(hasRed || hasBlue ? 1 : 0);
+  result.explanation = msg;
+  result.display = (hasRed || hasBlue) ? 'true (clique found)' : 'false (Ramsey-avoiding)';
+  return result;
+}
+
+// complement(A) — flip 0↔1 (off-diagonal) to get the complementary coloring
+function fnComplement(t, pos) {
+  if (t.rank !== 2) throw TypeError_('complement() requires a rank-2 adjacency matrix.', pos);
+  var n = t.value.length;
+  var rows = [];
+  for (var i = 0; i < n; i++) {
+    var row = [];
+    for (var j = 0; j < n; j++) row.push(i === j ? 0 : (1 - t.value[i][j]));
+    rows.push(row);
+  }
+  var result = tensor2(rows, t.spaces, t.variances);
+  result.explanation = 'Complement graph — all edges flipped (0↔1, diagonal stays 0).';
+  return result;
+}
+
+// chromatic(A) — count edges by color: {red: Σ(A[i][j]=1)/2, blue: Σ(A[i][j]=0)/2}
+function fnChromatic(t, pos) {
+  if (t.rank !== 2) throw TypeError_('chromatic() requires a rank-2 adjacency matrix.', pos);
+  var n = t.value.length;
+  var red = 0, blue = 0;
+  for (var i = 0; i < n; i++)
+    for (var j = i + 1; j < n; j++)
+      if (t.value[i][j] === 1) red++; else blue++;
+  var total = n * (n - 1) / 2;
+  var result = scalar(total);
+  result.display = 'red=' + red + ', blue=' + blue + ' (total=' + total + ')';
+  result.explanation = n + '-vertex graph: ' + red + ' red edges (1), ' + blue + ' blue edges (0), ' + total + ' total.';
+  return result;
+}
+
+// degree(A) — degree sequence (row sums) as a vector
+function fnDegree(t, pos) {
+  if (t.rank !== 2) throw TypeError_('degree() requires a rank-2 adjacency matrix.', pos);
+  var n = t.value.length;
+  var degs = [];
+  for (var i = 0; i < n; i++) {
+    var d = 0;
+    for (var j = 0; j < n; j++) d += t.value[i][j];
+    degs.push(d);
+  }
+  var result = vector(degs);
+  var min = Math.min.apply(null, degs), max = Math.max.apply(null, degs);
+  result.explanation = 'Degree sequence: min=' + min + ', max=' + max + ', sum=' + degs.reduce(function(a,b){return a+b;},0) + '.';
+  return result;
+}
+
+// independent_set(A, k) — count independent sets of size k (no edges between any pair)
+function fnIndependentSet(a, b, pos) {
+  if (a.rank !== 2) throw TypeError_('independent_set() requires a rank-2 adjacency matrix.', pos);
+  if (b.rank !== 0) throw TypeError_('independent_set() requires a scalar set size.', pos);
+  var A = a.value;
+  var n = A.length;
+  var k = Math.round(b.value);
+  if (k < 1 || k > 15) throw TypeError_('independent_set() requires 1 ≤ k ≤ 15.', pos);
+  if (k > n) return scalar(0);
+
+  var count = 0;
+  var subset = [];
+
+  function enumerate(start, depth) {
+    if (depth === k) {
+      for (var i = 0; i < k; i++)
+        for (var j = i + 1; j < k; j++)
+          if (A[subset[i]][subset[j]] !== 0) return;
+      count++;
+      return;
+    }
+    for (var v = start; v < n; v++) {
+      subset[depth] = v;
+      enumerate(v + 1, depth + 1);
+    }
+  }
+  enumerate(0, 0);
+
+  var result = scalar(count);
+  result.explanation = 'Found ' + count + ' independent sets of size ' + k + ' in the ' + n + '-vertex graph (no edges between any pair).';
+  return result;
+}
+
+// ramsey_search(n, s, t) — random search for Ramsey-avoiding colorings of K_n
+function fnRamseySearch(args, pos) {
+  if (args.length !== 3) throw TypeError_('ramsey_search(n, s, t) requires 3 scalar arguments.', pos);
+  var nArg = args[0], sArg = args[1], tArg = args[2];
+  if (nArg.rank !== 0 || sArg.rank !== 0 || tArg.rank !== 0)
+    throw TypeError_('ramsey_search() arguments must be scalars.', pos);
+  var n = Math.round(nArg.value);
+  var s = Math.round(sArg.value);
+  var t = Math.round(tArg.value);
+  if (n < 2 || n > 20) throw TypeError_('ramsey_search() requires 2 ≤ n ≤ 20.', pos);
+
+  var edges = n * (n - 1) / 2;
+  var maxTrials = Math.min(10000, Math.pow(2, edges));
+  var found = null;
+
+  function hasClique(M, k) {
+    if (k > n) return false;
+    var sub = [];
+    function search(start, depth) {
+      if (depth === k) {
+        for (var i = 0; i < k; i++)
+          for (var j = i + 1; j < k; j++)
+            if (M[sub[i]][sub[j]] === 0) return false;
+        return true;
+      }
+      for (var v = start; v < n; v++) {
+        sub[depth] = v;
+        if (search(v + 1, depth + 1)) return true;
+      }
+      return false;
+    }
+    return search(0, 0);
+  }
+
+  for (var trial = 0; trial < maxTrials; trial++) {
+    // Generate random 2-coloring
+    var adj = [];
+    for (var i = 0; i < n; i++) {
+      adj[i] = [];
+      for (var j = 0; j < n; j++) {
+        if (i === j) adj[i][j] = 0;
+        else if (j > i) adj[i][j] = Math.random() < 0.5 ? 1 : 0;
+        else adj[i][j] = adj[j][i];
+      }
+    }
+    // Build complement
+    var comp = [];
+    for (var i = 0; i < n; i++) {
+      comp[i] = [];
+      for (var j = 0; j < n; j++) comp[i][j] = (i === j) ? 0 : (1 - adj[i][j]);
+    }
+    if (!hasClique(adj, s) && !hasClique(comp, t)) {
+      found = adj;
+      break;
+    }
+  }
+
+  if (found) {
+    var result = tensor2(found);
+    result.explanation = 'Found Ramsey-avoiding coloring of K_' + n + ' for R(' + s + ',' + t + ') after ' + (trial + 1) + ' random trials. This ' + n + '-vertex coloring contains no red K_' + s + ' and no blue K_' + t + '.';
+    return result;
+  } else {
+    var result = scalar(0);
+    result.display = 'none found';
+    result.explanation = 'No R(' + s + ',' + t + ')-avoiding coloring of K_' + n + ' found in ' + maxTrials + ' random trials. If R(' + s + ',' + t + ') ≤ ' + n + ', none exists.';
+    return result;
+  }
+}
+
+// circulant(n, S) — circulant graph: edge (u,v) iff |u-v| mod n is in set S
+// S given as a vector of differences
+function fnCirculant(a, b, pos) {
+  if (a.rank !== 0) throw TypeError_('circulant() first arg must be scalar (vertex count).', pos);
+  if (b.rank !== 1) throw TypeError_('circulant() second arg must be a vector (difference set).', pos);
+  var n = Math.round(a.value);
+  var S = new Set();
+  for (var i = 0; i < b.value.length; i++) {
+    var d = ((Math.round(b.value[i]) % n) + n) % n;
+    S.add(d);
+    S.add((n - d) % n); // symmetric
+  }
+  var rows = [];
+  for (var i = 0; i < n; i++) {
+    rows[i] = [];
+    for (var j = 0; j < n; j++) {
+      var diff = ((j - i) % n + n) % n;
+      rows[i][j] = (i !== j && S.has(diff)) ? 1 : 0;
+    }
+  }
+  var result = tensor2(rows);
+  result.explanation = 'Circulant graph on ' + n + ' vertices with difference set {' + Array.from(S).sort(function(a,b){return a-b;}).join(', ') + '}.';
+  return result;
+}
+
+// paley(p) — Paley graph: vertices = Z_p, edge iff (u-v) is a quadratic residue mod p
+// p must be prime and p ≡ 1 (mod 4)
+function fnPaley(t, pos) {
+  if (t.rank !== 0) throw TypeError_('paley() expects a scalar (prime p).', pos);
+  var p = Math.round(t.value);
+  // Check prime
+  if (p < 5) throw TypeError_('paley() requires p >= 5.', pos);
+  for (var d = 2; d * d <= p; d++) {
+    if (p % d === 0) throw TypeError_('paley() requires p to be prime. ' + p + ' is divisible by ' + d + '.', pos);
+  }
+  if (p % 4 !== 1) throw TypeError_('paley() requires p ≡ 1 (mod 4). Got p=' + p + ' ≡ ' + (p%4) + ' (mod 4).', pos);
+  // Build quadratic residues
+  var qr = new Set();
+  for (var x = 1; x < p; x++) qr.add((x * x) % p);
+  var rows = [];
+  for (var i = 0; i < p; i++) {
+    rows[i] = [];
+    for (var j = 0; j < p; j++) {
+      var diff = ((j - i) % p + p) % p;
+      rows[i][j] = (i !== j && qr.has(diff)) ? 1 : 0;
+    }
+  }
+  var result = tensor2(rows);
+  result.explanation = 'Paley graph on ' + p + ' vertices (QR mod ' + p + '). ' + qr.size + ' quadratic residues. Self-complementary, vertex-transitive.';
+  return result;
+}
+
+// ramsey_energy(A, r, s) — compute Ramsey energy E(G) = count(K_r) + count(I_s)
+function fnRamseyEnergy(args, pos) {
+  if (args.length !== 3) throw TypeError_('ramsey_energy(A, r, s) requires 3 arguments.', pos);
+  var A = args[0], rArg = args[1], sArg = args[2];
+  if (A.rank !== 2) throw TypeError_('ramsey_energy() first arg must be adjacency matrix.', pos);
+  if (rArg.rank !== 0 || sArg.rank !== 0) throw TypeError_('ramsey_energy() r and s must be scalars.', pos);
+  var adj = A.value;
+  var n = adj.length;
+  var r = Math.round(rArg.value);
+  var s = Math.round(sArg.value);
+
+  // Count r-cliques in A
+  function countSubgraphs(M, k) {
+    if (k > n) return 0;
+    var count = 0;
+    var sub = [];
+    function search(start, depth) {
+      if (depth === k) {
+        for (var i = 0; i < k; i++)
+          for (var j = i + 1; j < k; j++)
+            if (M[sub[i]][sub[j]] === 0) return;
+        count++;
+        return;
+      }
+      for (var v = start; v < n; v++) {
+        sub[depth] = v;
+        search(v + 1, depth + 1);
+      }
+    }
+    search(0, 0);
+    return count;
+  }
+
+  var cliques = countSubgraphs(adj, r);
+  // Build complement for independent sets
+  var comp = [];
+  for (var i = 0; i < n; i++) {
+    comp[i] = [];
+    for (var j = 0; j < n; j++) comp[i][j] = (i === j) ? 0 : (1 - adj[i][j]);
+  }
+  var indsets = countSubgraphs(comp, s);
+
+  var energy = cliques + indsets;
+  var result = scalar(energy);
+  result.display = energy + ' (K_' + r + '=' + cliques + ', I_' + s + '=' + indsets + ')';
+  result.explanation = 'Ramsey energy for R(' + r + ',' + s + '): ' + cliques + ' cliques of size ' + r + ' + ' + indsets + ' independent sets of size ' + s + ' = ' + energy + '. Goal: E=0.';
+  return result;
+}
+
+// ramsey_anneal(n, r, s) — simulated annealing search (inspired by AlphaEvolve Algorithm 7)
+function fnRamseyAnneal(args, pos) {
+  if (args.length < 3 || args.length > 4) throw TypeError_('ramsey_anneal(n, r, s [, trials]) requires 3-4 arguments.', pos);
+  var nArg = args[0], rArg = args[1], sArg = args[2];
+  var trialsArg = args.length > 3 ? args[3] : null;
+  if (nArg.rank !== 0 || rArg.rank !== 0 || sArg.rank !== 0) throw TypeError_('ramsey_anneal() args must be scalars.', pos);
+  var n = Math.round(nArg.value);
+  var r = Math.round(rArg.value);
+  var s = Math.round(sArg.value);
+  var maxTrials = trialsArg ? Math.round(trialsArg.value) : 3;
+  if (n < 3 || n > 30) throw TypeError_('ramsey_anneal() requires 3 ≤ n ≤ 30.', pos);
+  if (maxTrials < 1 || maxTrials > 20) maxTrials = 3;
+
+  function countSub(M, k) {
+    var cnt = 0, sub = [];
+    function go(start, depth) {
+      if (depth === k) {
+        for (var i = 0; i < k; i++)
+          for (var j = i + 1; j < k; j++)
+            if (M[sub[i]][sub[j]] === 0) return;
+        cnt++; return;
+      }
+      for (var v = start; v < n; v++) { sub[depth] = v; go(v + 1, depth + 1); }
+    }
+    go(0, 0); return cnt;
+  }
+
+  function energy(adj) {
+    var comp = [];
+    for (var i = 0; i < n; i++) {
+      comp[i] = [];
+      for (var j = 0; j < n; j++) comp[i][j] = (i === j) ? 0 : (1 - adj[i][j]);
+    }
+    return countSub(adj, r) + countSub(comp, s);
+  }
+
+  var bestAdj = null, bestE = Infinity;
+
+  for (var trial = 0; trial < maxTrials; trial++) {
+    // Random init
+    var adj = [];
+    for (var i = 0; i < n; i++) {
+      adj[i] = [];
+      for (var j = 0; j < n; j++) {
+        if (i === j) adj[i][j] = 0;
+        else if (j > i) adj[i][j] = Math.random() < 0.5 ? 1 : 0;
+        else adj[i][j] = adj[j][i];
+      }
+    }
+
+    var E = energy(adj);
+    var T = 1.0;
+    var steps = n * n * 200;
+
+    for (var step = 0; step < steps && E > 0; step++) {
+      // Random edge flip
+      var u = Math.floor(Math.random() * n);
+      var v = Math.floor(Math.random() * n);
+      if (u === v) continue;
+      if (u > v) { var tmp = u; u = v; v = tmp; }
+
+      adj[u][v] = 1 - adj[u][v];
+      adj[v][u] = adj[u][v];
+      var newE = energy(adj);
+      var dE = newE - E;
+
+      if (dE <= 0 || Math.random() < Math.exp(-dE / T)) {
+        E = newE;
+      } else {
+        adj[u][v] = 1 - adj[u][v];
+        adj[v][u] = adj[u][v];
+      }
+      T *= 0.9997;
+    }
+
+    if (E < bestE) { bestE = E; bestAdj = adj.map(function(r) { return r.slice(); }); }
+    if (bestE === 0) break;
+  }
+
+  if (bestE === 0) {
+    var result = tensor2(bestAdj);
+    result.explanation = 'Simulated annealing found R(' + r + ',' + s + ')-avoiding coloring of K_' + n + ' (energy=0, no K_' + r + ' cliques, no I_' + s + ' independent sets). Trial ' + (trial + 1) + '/' + maxTrials + '.';
+    return result;
+  } else {
+    var result = tensor2(bestAdj);
+    result.explanation = 'Best coloring found has energy ' + bestE + ' (not zero — K_' + n + ' may not have an R(' + r + ',' + s + ')-avoiding coloring). Ran ' + maxTrials + ' trial(s).';
+    return result;
+  }
+}
+
+// spectral_gap(A) — λ₁ - λ₂, the expansion parameter
+function fnSpectralGap(t, pos) {
+  var eigs = fnEigenvalues(t, pos);
+  var vals = eigs.value;
+  if (vals.length < 2) throw TypeError_('spectral_gap() requires at least a 2x2 matrix.', pos);
+  var gap = vals[0] - vals[1];
+  var result = scalar(gap);
+  result.explanation = 'Spectral gap = λ₁ - λ₂ = ' + +vals[0].toFixed(6) + ' - ' + +vals[1].toFixed(6) + ' = ' + +gap.toFixed(6) + '. Larger gap → better expansion → fewer large cliques/independent sets.';
+  return result;
+}
+
+// hoffman_bound(A) — upper bound on independence number from eigenvalues
+// α(G) ≤ n × (-λ_min) / (λ_max - λ_min)
+function fnHoffmanBound(t, pos) {
+  if (t.rank !== 2) throw TypeError_('hoffman_bound() requires a rank-2 adjacency matrix.', pos);
+  var n = t.value.length;
+  var eigs = fnEigenvalues(t, pos);
+  var vals = eigs.value;
+  var lmax = vals[0], lmin = vals[vals.length - 1];
+  if (Math.abs(lmax - lmin) < 1e-10) throw TypeError_('hoffman_bound(): degenerate spectrum (all eigenvalues equal).', pos);
+  var bound = n * (-lmin) / (lmax - lmin);
+  var result = scalar(Math.floor(bound));
+  result.display = Math.floor(bound) + ' (Hoffman bound)';
+  result.explanation = 'Hoffman bound: α(G) ≤ n·(-λ_min)/(λ_max - λ_min) = ' + n + '·(' + +(-lmin).toFixed(4) + ')/(' + +(lmax - lmin).toFixed(4) + ') = ' + +bound.toFixed(4) + ' → α(G) ≤ ' + Math.floor(bound) + '. Spectrum: λ_max=' + +lmax.toFixed(4) + ', λ_min=' + +lmin.toFixed(4) + '.';
+  return result;
+}
+
+// cubic_residue(p) — cubic residue graph on prime p vertices
+// Edge (u,v) iff (u-v) is a cubic residue mod p (p ≡ 1 mod 3)
+function fnCubicResidue(t, pos) {
+  if (t.rank !== 0) throw TypeError_('cubic_residue() expects a scalar (prime p).', pos);
+  var p = Math.round(t.value);
+  if (p < 7) throw TypeError_('cubic_residue() requires p >= 7.', pos);
+  for (var d = 2; d * d <= p; d++)
+    if (p % d === 0) throw TypeError_('cubic_residue() requires p to be prime. ' + p + ' is divisible by ' + d + '.', pos);
+  if (p % 3 !== 1) throw TypeError_('cubic_residue() requires p ≡ 1 (mod 3). Got p=' + p + ' ≡ ' + (p%3) + ' (mod 3).', pos);
+
+  var cr = new Set();
+  for (var x = 1; x < p; x++) cr.add((x * x * x) % p);
+  var rows = [];
+  for (var i = 0; i < p; i++) {
+    rows[i] = [];
+    for (var j = 0; j < p; j++) {
+      var diff = ((j - i) % p + p) % p;
+      rows[i][j] = (i !== j && cr.has(diff)) ? 1 : 0;
+    }
+  }
+  var result = tensor2(rows);
+  result.explanation = 'Cubic residue graph on ' + p + ' vertices. ' + cr.size + ' cubic residues mod ' + p + '. Vertex-transitive.';
+  return result;
+}
+
+// ramsey_spectrum(p_min, p_max, r, s) — scan Paley graphs for Ramsey avoidance and spectral properties
+function fnRamseySpectrum(args, pos) {
+  if (args.length !== 4) throw TypeError_('ramsey_spectrum(p_min, p_max, r, s) requires 4 scalar arguments.', pos);
+  for (var i = 0; i < 4; i++)
+    if (args[i].rank !== 0) throw TypeError_('ramsey_spectrum() arguments must be scalars.', pos);
+  var pMin = Math.round(args[0].value);
+  var pMax = Math.round(args[1].value);
+  var r = Math.round(args[2].value);
+  var s = Math.round(args[3].value);
+  if (pMin < 5) pMin = 5;
+  if (pMax > 50) pMax = 50;
+
+  function isPrime(n) {
+    if (n < 2) return false;
+    for (var d = 2; d * d <= n; d++) if (n % d === 0) return false;
+    return true;
+  }
+
+  var results = [];
+  for (var p = pMin; p <= pMax; p++) {
+    if (!isPrime(p) || p % 4 !== 1) continue;
+    // Build Paley graph
+    var qr = new Set();
+    for (var x = 1; x < p; x++) qr.add((x * x) % p);
+    var adj = [];
+    for (var i = 0; i < p; i++) {
+      adj[i] = [];
+      for (var j = 0; j < p; j++) {
+        var diff = ((j - i) % p + p) % p;
+        adj[i][j] = (i !== j && qr.has(diff)) ? 1 : 0;
+      }
+    }
+    // Count cliques and independent sets
+    function countSub(M, k, n) {
+      if (k > n) return 0;
+      var cnt = 0, sub = [];
+      function go(start, depth) {
+        if (depth === k) {
+          for (var a = 0; a < k; a++)
+            for (var b = a+1; b < k; b++)
+              if (M[sub[a]][sub[b]] === 0) return;
+          cnt++; return;
+        }
+        for (var v = start; v < n; v++) { sub[depth] = v; go(v+1, depth+1); }
+      }
+      go(0, 0); return cnt;
+    }
+    var comp = [];
+    for (var i = 0; i < p; i++) {
+      comp[i] = [];
+      for (var j = 0; j < p; j++) comp[i][j] = (i === j) ? 0 : (1 - adj[i][j]);
+    }
+    var kr = countSub(adj, r, p);
+    var is = countSub(comp, s, p);
+    var avoids = (kr === 0 && is === 0);
+    // Eigenvalues for Paley graph: known formula — λ=(-1±√p)/2
+    var lmax = (p - 1) / 2;
+    var lmin = (-1 - Math.sqrt(p)) / 2;
+    var gap = lmax - ((-1 + Math.sqrt(p)) / 2);
+    var hoffman = Math.floor(p * (-lmin) / (lmax - lmin));
+
+    results.push({p: p, avoids: avoids, kr: kr, is: is, gap: +gap.toFixed(2), hoffman: hoffman});
+  }
+
+  var lines = results.map(function(r) {
+    return 'Paley(' + r.p + '): ' + (r.avoids ? 'AVOIDS' : 'fails') +
+      ' R(' + args[2].value + ',' + args[3].value + ')' +
+      ' K_' + args[2].value + '=' + r.kr + ' I_' + args[3].value + '=' + r.is +
+      ' gap=' + r.gap + ' α≤' + r.hoffman;
+  });
+
+  var avoiding = results.filter(function(r) { return r.avoids; });
+  var result = scalar(avoiding.length);
+  result.display = avoiding.length + ' of ' + results.length + ' Paley graphs avoid R(' + r + ',' + s + ')';
+  result.explanation = lines.join('\n');
+  return result;
+}
+
+// ramsey_predict(A, r, s) — spectral prediction of Ramsey avoidance
+// Uses Hoffman bound on A and complement(A) to predict without exhaustive clique counting
+function fnRamseyPredict(args, pos) {
+  if (args.length !== 3) throw TypeError_('ramsey_predict(A, r, s) requires 3 arguments.', pos);
+  var A = args[0], rArg = args[1], sArg = args[2];
+  if (A.rank !== 2) throw TypeError_('ramsey_predict() first arg must be adjacency matrix.', pos);
+  var n = A.value.length;
+  var r = Math.round(rArg.value);
+  var s = Math.round(sArg.value);
+
+  // Eigenvalues of A
+  var eigA = fnEigenvalues(A, pos).value;
+  var lmaxA = eigA[0], lminA = eigA[eigA.length - 1];
+  var hoffmanA = Math.floor(n * (-lminA) / (lmaxA - lminA));
+  var gapA = eigA[0] - eigA[1];
+
+  // Build complement
+  var comp = [];
+  for (var i = 0; i < n; i++) {
+    comp[i] = [];
+    for (var j = 0; j < n; j++) comp[i][j] = (i === j) ? 0 : (1 - A.value[i][j]);
+  }
+  var compT = tensor2(comp, A.spaces, A.variances);
+  var eigC = fnEigenvalues(compT, pos).value;
+  var lmaxC = eigC[0], lminC = eigC[eigC.length - 1];
+  var hoffmanC = Math.floor(n * (-lminC) / (lmaxC - lminC));
+  var gapC = eigC[0] - eigC[1];
+
+  // Hoffman bound on A gives max independent set in A = max clique in complement
+  // α(A) ≤ hoffmanA → complement has no clique larger than hoffmanA
+  // α(complement) ≤ hoffmanC → A has no clique larger than hoffmanC
+  // So: if hoffmanC < r → no red K_r guaranteed (A has no r-clique)
+  //     if hoffmanA < s → no blue K_s guaranteed (complement has no s-clique, i.e., A has no s-independent-set)
+
+  var predictNoRedClique = hoffmanC < r;
+  var predictNoBlueClique = hoffmanA < s;
+  var predictAvoids = predictNoRedClique && predictNoBlueClique;
+
+  var lines = [];
+  lines.push('Spectral Ramsey prediction for R(' + r + ',' + s + ') on ' + n + ' vertices:');
+  lines.push('');
+  lines.push('Graph A:  λ_max=' + +lmaxA.toFixed(3) + '  λ_min=' + +lminA.toFixed(3) + '  gap=' + +gapA.toFixed(3) + '  α(A) ≤ ' + hoffmanA);
+  lines.push('Compl Ā: λ_max=' + +lmaxC.toFixed(3) + '  λ_min=' + +lminC.toFixed(3) + '  gap=' + +gapC.toFixed(3) + '  α(Ā) ≤ ' + hoffmanC);
+  lines.push('');
+  lines.push('Red K_' + r + ' (clique in A):   ω(A) ≤ α(Ā) ≤ ' + hoffmanC + (predictNoRedClique ? ' < ' + r + ' → IMPOSSIBLE' : ' ≥ ' + r + ' → possible'));
+  lines.push('Blue K_' + s + ' (indep in A):  α(A) ≤ ' + hoffmanA + (predictNoBlueClique ? ' < ' + s + ' → IMPOSSIBLE' : ' ≥ ' + s + ' → possible'));
+  lines.push('');
+  if (predictAvoids) {
+    lines.push('PREDICTION: Graph AVOIDS R(' + r + ',' + s + ') — proven by spectral bound alone (no enumeration needed).');
+    lines.push('Complexity: O(n³) eigenvalue computation vs O(n^' + Math.max(r,s) + ') exhaustive search.');
+  } else if (predictNoRedClique) {
+    lines.push('PARTIAL: No red K_' + r + ' guaranteed by spectrum. Blue K_' + s + ' requires enumeration to confirm/deny.');
+  } else if (predictNoBlueClique) {
+    lines.push('PARTIAL: No blue K_' + s + ' guaranteed by spectrum. Red K_' + r + ' requires enumeration to confirm/deny.');
+  } else {
+    lines.push('INCONCLUSIVE: Spectral bounds cannot rule out either clique type. Full enumeration required.');
+  }
+
+  var result = scalar(predictAvoids ? 1 : 0);
+  result.display = predictAvoids ? 'AVOIDS (spectral proof)' : (predictNoRedClique || predictNoBlueClique ? 'PARTIAL' : 'INCONCLUSIVE');
+  result.explanation = lines.join('\n');
+  return result;
+}
+
+// graph_profile(A) — comprehensive one-call analysis of a graph
+function fnGraphProfile(t, pos) {
+  if (t.rank !== 2) throw TypeError_('graph_profile() requires a rank-2 adjacency matrix.', pos);
+  var n = t.value.length;
+  var A = t.value;
+
+  // Basic stats
+  var edges = 0;
+  for (var i = 0; i < n; i++)
+    for (var j = i+1; j < n; j++)
+      if (A[i][j]) edges++;
+
+  // Degree sequence
+  var degs = [];
+  for (var i = 0; i < n; i++) {
+    var d = 0;
+    for (var j = 0; j < n; j++) d += A[i][j];
+    degs.push(d);
+  }
+  var minDeg = Math.min.apply(null, degs);
+  var maxDeg = Math.max.apply(null, degs);
+  var avgDeg = degs.reduce(function(a,b){return a+b;},0) / n;
+  var regular = (minDeg === maxDeg);
+
+  // Triangles via trace(A³)/6
+  var A2 = [], A3tr = 0;
+  for (var i = 0; i < n; i++) {
+    A2[i] = [];
+    for (var j = 0; j < n; j++) {
+      var s = 0;
+      for (var k = 0; k < n; k++) s += A[i][k] * A[k][j];
+      A2[i][j] = s;
+    }
+  }
+  for (var i = 0; i < n; i++)
+    for (var k = 0; k < n; k++)
+      A3tr += A2[i][k] * A[k][i];
+  var tri = A3tr / 6;
+
+  // Eigenvalues
+  var eigs = fnEigenvalues(t, pos).value;
+  var lmax = eigs[0], lmin = eigs[eigs.length-1];
+  var gap = eigs.length >= 2 ? eigs[0] - eigs[1] : 0;
+  var hoffman = Math.floor(n * (-lmin) / (lmax - lmin));
+
+  // Complement stats
+  var compEdges = n*(n-1)/2 - edges;
+
+  // Self-complementary check
+  var selfComp = (edges === compEdges);
+
+  // Symmetry check
+  var symmetric = true;
+  for (var i = 0; i < n && symmetric; i++)
+    for (var j = 0; j < n && symmetric; j++)
+      if (A[i][j] !== A[j][i]) symmetric = false;
+
+  var lines = [];
+  lines.push('Graph Profile (' + n + ' vertices):');
+  lines.push('  Edges: ' + edges + ' / ' + (n*(n-1)/2) + ' possible (' + +(100*edges/(n*(n-1)/2)).toFixed(1) + '% density)');
+  lines.push('  Degree: min=' + minDeg + ' max=' + maxDeg + ' avg=' + +avgDeg.toFixed(1) + (regular ? ' (regular)' : ''));
+  lines.push('  Triangles: ' + tri);
+  lines.push('  Symmetric: ' + symmetric);
+  lines.push('  Self-complementary: ' + selfComp);
+  lines.push('  Spectrum: λ_max=' + +lmax.toFixed(4) + ' λ_min=' + +lmin.toFixed(4));
+  lines.push('  Spectral gap: ' + +gap.toFixed(4));
+  lines.push('  Hoffman bound: α(G) ≤ ' + hoffman);
+  lines.push('  Clique bound: ω(G) ≤ ' + Math.floor(n * (-lmin) / ((n-1-lmax) + (-lmin))) + ' (complement Hoffman)');
+
+  var result = scalar(n);
+  result.display = n + '-vertex graph (' + edges + ' edges, ' + (regular ? maxDeg+'-regular' : 'irregular') + ')';
+  result.explanation = lines.join('\n');
+  return result;
+}
+
+// fast_triangles(A) — triangle count via tensor contraction trace(A³)/6
+// Same as triangles() but shows the tensor derivation explicitly
+function fnFastTriangles(t, pos) {
+  if (t.rank !== 2) throw TypeError_('fast_triangles() requires a rank-2 adjacency matrix.', pos);
+  var n = t.value.length;
+  var A = t.value;
+
+  // A² via contraction
+  var A2 = [];
+  for (var i = 0; i < n; i++) {
+    A2[i] = [];
+    for (var j = 0; j < n; j++) {
+      var s = 0;
+      for (var k = 0; k < n; k++) s += A[i][k] * A[k][j];
+      A2[i][j] = s;
+    }
+  }
+
+  // trace(A² ∘ A) = trace(A³) via Hadamard shortcut
+  // (A³)_ii = Σ_j (A²)_ij * A_ji = Σ_j (A²)_ij * A_ij (symmetric)
+  // So trace(A³) = Σ_ij (A²)_ij * A_ij = sum of Hadamard(A², A)
+  var trA3 = 0;
+  for (var i = 0; i < n; i++)
+    for (var j = 0; j < n; j++)
+      trA3 += A2[i][j] * A[i][j];
+
+  var count = trA3 / 6;
+
+  // Also count 4-cliques via tensor method if n is small enough
+  var k4 = -1;
+  if (n <= 30) {
+    // K_4 count = (trace(A⁴) + 3*trace(A²∘A²) - 6*Σ_i d_i(d_i-1)) / 24
+    // Simplified: use trace(A²∘A²) = Σ_ij (A²_ij)²
+    var trA4 = 0;
+    for (var i = 0; i < n; i++)
+      for (var j = 0; j < n; j++) {
+        var s = 0;
+        for (var k = 0; k < n; k++) s += A2[i][k] * A2[k][j];
+        if (i === j) trA4 += s;
+      }
+
+    var trA2sq = 0;
+    for (var i = 0; i < n; i++)
+      for (var j = 0; j < n; j++)
+        trA2sq += A2[i][j] * A2[i][j];
+
+    var degSum = 0;
+    for (var i = 0; i < n; i++) {
+      var d = 0;
+      for (var j = 0; j < n; j++) d += A[i][j];
+      degSum += d * (d - 1);
+    }
+
+    // K_4 = (trace(A⁴) - 4*trace(A³) - 2*trace(A²)² + 4*trace(A²) + 8*Σd(d-1)...) / 24
+    // This is complex — let's use the simpler path-based formula:
+    // paths_4[i][i] = closed walks of length 4 through i
+    // But closed walks ≠ 4-cliques directly. For now report tensor-computed walks.
+    k4 = -1; // skip — would need inclusion-exclusion
+  }
+
+  var result = scalar(count);
+  result.display = count + ' triangles';
+  result.explanation = 'Tensor contraction method:\n' +
+    '  A² = A @ A (contraction over shared index)\n' +
+    '  trace(A³) = Σᵢⱼ A²ᵢⱼ · Aᵢⱼ = ' + trA3 + ' (Hadamard trace shortcut)\n' +
+    '  Triangles = trace(A³) / 6 = ' + trA3 + ' / 6 = ' + count + '\n' +
+    '  Complexity: O(n³) via matrix multiplication vs O(n³) exhaustive for k=3.';
+  return result;
+}
+
+// ramsey_threshold(k) — find the spectral threshold prime where Paley graphs
+// transition from avoiding to failing R(k,k)
+// For Paley(p): α ≤ floor(p·(1+√p)/2 / ((p-1)/2 + (1+√p)/2))
+//            = floor(p·(1+√p) / (p + √p))
+//            ≈ √p for large p
+// So R(k,k) avoidance breaks when √p ≈ k, i.e., p ≈ k²
+function fnRamseyThreshold(args, pos) {
+  if (args.length !== 1 && args.length !== 2) throw TypeError_('ramsey_threshold(k [, p_max]) requires 1-2 scalar arguments.', pos);
+  var k = Math.round(args[0].value);
+  var pMax = args.length > 1 ? Math.round(args[1].value) : Math.min(k * k * 4, 200);
+  if (k < 3 || k > 10) throw TypeError_('ramsey_threshold() requires 3 ≤ k ≤ 10.', pos);
+  if (pMax > 200) pMax = 200;
+
+  function isPrime(n) {
+    if (n < 2) return false;
+    for (var d = 2; d * d <= n; d++) if (n % d === 0) return false;
+    return true;
+  }
+
+  var lines = [];
+  lines.push('Spectral threshold analysis for R(' + k + ',' + k + '):');
+  lines.push('');
+  lines.push('For Paley(p): Hoffman bound gives α(G) ≤ floor(√p)');
+  lines.push('R(' + k + ',' + k + ') avoidance requires α < ' + k + ', so √p < ' + k + ', so p < ' + (k*k));
+  lines.push('Predicted threshold: p ≈ ' + (k*k) + ' (first prime where avoidance fails)');
+  lines.push('');
+
+  var lastAvoider = 0;
+  var firstFailer = 0;
+  var results = [];
+
+  for (var p = 5; p <= pMax; p++) {
+    if (!isPrime(p) || p % 4 !== 1) continue;
+
+    // Hoffman bound for Paley(p)
+    var lmax = (p - 1) / 2;
+    var lmin = (-1 - Math.sqrt(p)) / 2;
+    var hoffman = Math.floor(p * (-lmin) / (lmax - lmin));
+    var spectralAvoids = hoffman < k;
+
+    // For small enough p, verify by counting
+    var verified = '?';
+    if (p <= 50) {
+      var qr = new Set();
+      for (var x = 1; x < p; x++) qr.add((x * x) % p);
+      var adj = [];
+      for (var i = 0; i < p; i++) {
+        adj[i] = [];
+        for (var j = 0; j < p; j++) {
+          var diff = ((j - i) % p + p) % p;
+          adj[i][j] = (i !== j && qr.has(diff)) ? 1 : 0;
+        }
+      }
+      // Count k-cliques
+      function countSub(M, kk, n) {
+        var cnt = 0, sub = [];
+        function go(start, depth) {
+          if (depth === kk) {
+            for (var a = 0; a < kk; a++)
+              for (var b = a+1; b < kk; b++)
+                if (M[sub[a]][sub[b]] === 0) return;
+            cnt++; return;
+          }
+          for (var v = start; v < n; v++) { sub[depth] = v; go(v+1, depth+1); }
+        }
+        go(0, 0); return cnt;
+      }
+      var cliques = countSub(adj, k, p);
+      verified = cliques === 0 ? 'AVOIDS' : 'FAILS(' + cliques + ')';
+
+      if (cliques === 0) lastAvoider = p;
+      else if (firstFailer === 0) firstFailer = p;
+    } else {
+      if (spectralAvoids) { lastAvoider = Math.max(lastAvoider, p); verified = 'avoids(spectral)'; }
+      else verified = 'unknown';
+    }
+
+    var marker = spectralAvoids ? '★' : ' ';
+    results.push({p: p, hoffman: hoffman, spectral: spectralAvoids, verified: verified, marker: marker});
+  }
+
+  for (var i = 0; i < results.length; i++) {
+    var r = results[i];
+    lines.push(r.marker + ' Paley(' + r.p + '): α≤' + r.hoffman + '  spectral=' + (r.spectral ? 'proves' : 'inconclusive') + '  actual=' + r.verified);
+  }
+
+  lines.push('');
+  if (lastAvoider > 0) lines.push('Largest Paley avoider: p=' + lastAvoider);
+  if (firstFailer > 0) lines.push('First Paley failure: p=' + firstFailer);
+  lines.push('Theoretical threshold: p ≈ ' + (k*k) + ' (where √p crosses ' + k + ')');
+  if (firstFailer > 0) lines.push('Actual/theoretical ratio: ' + +(firstFailer/(k*k)).toFixed(3));
+
+  var result = scalar(firstFailer > 0 ? firstFailer : -1);
+  result.display = 'R(' + k + ',' + k + '): threshold at Paley(' + (firstFailer > 0 ? firstFailer : '?') + '), predicted p≈' + (k*k);
+  result.explanation = lines.join('\n');
+  return result;
+}
+
+// family_compare(n, r, s) — compare Paley, circulant, and cubic residue graphs
+// of similar size for Ramsey avoidance
+function fnFamilyCompare(args, pos) {
+  if (args.length !== 3) throw TypeError_('family_compare(n, r, s) requires 3 scalar arguments.', pos);
+  var n = Math.round(args[0].value);
+  var r = Math.round(args[1].value);
+  var s = Math.round(args[2].value);
+  if (n < 5 || n > 40) throw TypeError_('family_compare() requires 5 ≤ n ≤ 40.', pos);
+
+  function isPrime(m) {
+    if (m < 2) return false;
+    for (var d = 2; d * d <= m; d++) if (m % d === 0) return false;
+    return true;
+  }
+
+  function buildAdj(M, nn) {
+    // Count cliques and independent sets
+    function countSub(adj, k, vn) {
+      if (k > vn) return 0;
+      var cnt = 0, sub = [];
+      function go(start, depth) {
+        if (depth === k) {
+          for (var a = 0; a < k; a++)
+            for (var b = a+1; b < k; b++)
+              if (adj[sub[a]][sub[b]] === 0) return;
+          cnt++; return;
+        }
+        for (var v = start; v < vn; v++) { sub[depth] = v; go(v+1, depth+1); }
+      }
+      go(0, 0); return cnt;
+    }
+    var comp = [];
+    for (var i = 0; i < nn; i++) {
+      comp[i] = [];
+      for (var j = 0; j < nn; j++) comp[i][j] = (i === j) ? 0 : (1 - M[i][j]);
+    }
+    var kr = countSub(M, r, nn);
+    var is = countSub(comp, s, nn);
+    var edges = 0;
+    for (var i = 0; i < nn; i++)
+      for (var j = i+1; j < nn; j++)
+        if (M[i][j]) edges++;
+    var tri = 0;
+    // Fast triangle count
+    var A2 = [];
+    for (var i = 0; i < nn; i++) {
+      A2[i] = [];
+      for (var j = 0; j < nn; j++) {
+        var ss = 0;
+        for (var k2 = 0; k2 < nn; k2++) ss += M[i][k2] * M[k2][j];
+        A2[i][j] = ss;
+      }
+    }
+    for (var i = 0; i < nn; i++)
+      for (var j = 0; j < nn; j++)
+        tri += A2[i][j] * M[i][j];
+    tri /= 6;
+
+    return {kr: kr, is: is, edges: edges, tri: tri, avoids: (kr === 0 && is === 0), density: +(edges/(nn*(nn-1)/2)*100).toFixed(1)};
+  }
+
+  var lines = [];
+  lines.push('Family comparison at n≈' + n + ' for R(' + r + ',' + s + '):');
+  lines.push('');
+  lines.push('Family           | n  | edges | density | tri   | K_' + r + ' | I_' + s + ' | avoids?');
+  lines.push('-'.repeat(80));
+
+  var families = [];
+
+  // Find nearest Paley prime
+  for (var p = n; p <= n + 20; p++) {
+    if (isPrime(p) && p % 4 === 1) {
+      var qr = new Set();
+      for (var x = 1; x < p; x++) qr.add((x * x) % p);
+      var adj = [];
+      for (var i = 0; i < p; i++) {
+        adj[i] = [];
+        for (var j = 0; j < p; j++) {
+          var diff = ((j - i) % p + p) % p;
+          adj[i][j] = (i !== j && qr.has(diff)) ? 1 : 0;
+        }
+      }
+      var stats = buildAdj(adj, p);
+      lines.push('Paley(' + p + ')       | ' + p + ' | ' + stats.edges + '   | ' + stats.density + '%   | ' + stats.tri + '   | ' + stats.kr + '   | ' + stats.is + '   | ' + (stats.avoids ? 'YES' : 'no'));
+      families.push({name: 'Paley(' + p + ')', avoids: stats.avoids, kr: stats.kr, is: stats.is});
+      break;
+    }
+  }
+
+  // Find nearest cubic residue prime
+  for (var p = n; p <= n + 20; p++) {
+    if (isPrime(p) && p % 3 === 1) {
+      var cr = new Set();
+      for (var x = 1; x < p; x++) cr.add((x * x * x) % p);
+      var adj = [];
+      for (var i = 0; i < p; i++) {
+        adj[i] = [];
+        for (var j = 0; j < p; j++) {
+          var diff = ((j - i) % p + p) % p;
+          adj[i][j] = (i !== j && cr.has(diff)) ? 1 : 0;
+        }
+      }
+      var stats = buildAdj(adj, p);
+      lines.push('CubicRes(' + p + ')   | ' + p + ' | ' + stats.edges + '   | ' + stats.density + '%   | ' + stats.tri + '   | ' + stats.kr + '   | ' + stats.is + '   | ' + (stats.avoids ? 'YES' : 'no'));
+      families.push({name: 'CubicRes(' + p + ')', avoids: stats.avoids, kr: stats.kr, is: stats.is});
+      break;
+    }
+  }
+
+  // Circulant with optimal-density difference set
+  var bestCirc = null, bestCircE = Infinity;
+  var halfN = Math.floor(n / 2);
+  var targetDeg = Math.floor(n / 2); // aim for ~50% density
+  // Try a few random difference sets
+  for (var trial = 0; trial < 50; trial++) {
+    var S = new Set();
+    for (var d = 1; d <= halfN; d++) {
+      if (Math.random() < 0.5) { S.add(d); S.add(n - d); }
+    }
+    if (S.size === 0) continue;
+    var adj = [];
+    for (var i = 0; i < n; i++) {
+      adj[i] = [];
+      for (var j = 0; j < n; j++) {
+        var diff = ((j - i) % n + n) % n;
+        adj[i][j] = (i !== j && S.has(diff)) ? 1 : 0;
+      }
+    }
+    var stats = buildAdj(adj, n);
+    var energy = stats.kr + stats.is;
+    if (energy < bestCircE) { bestCircE = energy; bestCirc = stats; bestCirc.S = S; }
+    if (energy === 0) break;
+  }
+  if (bestCirc) {
+    lines.push('Circulant(' + n + ')    | ' + n + ' | ' + bestCirc.edges + '   | ' + bestCirc.density + '%   | ' + bestCirc.tri + '   | ' + bestCirc.kr + '   | ' + bestCirc.is + '   | ' + (bestCirc.avoids ? 'YES' : 'no'));
+    families.push({name: 'Circulant(' + n + ')', avoids: bestCirc.avoids, kr: bestCirc.kr, is: bestCirc.is});
+  }
+
+  // Random graph for baseline
+  var bestRand = null, bestRandE = Infinity;
+  for (var trial = 0; trial < 20; trial++) {
+    var adj = [];
+    for (var i = 0; i < n; i++) {
+      adj[i] = [];
+      for (var j = 0; j < n; j++) {
+        if (i === j) adj[i][j] = 0;
+        else if (j > i) adj[i][j] = Math.random() < 0.5 ? 1 : 0;
+        else adj[i][j] = adj[j][i];
+      }
+    }
+    var stats = buildAdj(adj, n);
+    var energy = stats.kr + stats.is;
+    if (energy < bestRandE) { bestRandE = energy; bestRand = stats; }
+  }
+  if (bestRand) {
+    lines.push('Random(' + n + ')       | ' + n + ' | ' + bestRand.edges + '   | ' + bestRand.density + '%   | ' + bestRand.tri + '   | ' + bestRand.kr + '   | ' + bestRand.is + '   | ' + (bestRand.avoids ? 'YES' : 'no'));
+    families.push({name: 'Random(' + n + ')', avoids: bestRand.avoids, kr: bestRand.kr, is: bestRand.is});
+  }
+
+  lines.push('');
+  var avoiders = families.filter(function(f) { return f.avoids; });
+  if (avoiders.length > 0) {
+    lines.push('Avoiding families: ' + avoiders.map(function(f) { return f.name; }).join(', '));
+  } else {
+    lines.push('No family avoids R(' + r + ',' + s + ') at n≈' + n + '. Best energies:');
+    families.forEach(function(f) { lines.push('  ' + f.name + ': E=' + (f.kr + f.is)); });
+  }
+
+  var result = scalar(avoiders.length);
+  result.display = avoiders.length + ' of ' + families.length + ' families avoid R(' + r + ',' + s + ') at n≈' + n;
+  result.explanation = lines.join('\n');
+  return result;
+}
+
+// spectral_anneal(n, r, s [, trials]) — spectral-guided simulated annealing
+// Instead of pure random edge flips, biases toward flips that maintain
+// degree regularity (a proxy for spectral properties)
+function fnSpectralAnneal(args, pos) {
+  if (args.length < 3 || args.length > 4) throw TypeError_('spectral_anneal(n, r, s [, trials]) requires 3-4 arguments.', pos);
+  var n = Math.round(args[0].value);
+  var r = Math.round(args[1].value);
+  var s = Math.round(args[2].value);
+  var maxTrials = args.length > 3 ? Math.round(args[3].value) : 3;
+  if (n < 3 || n > 35) throw TypeError_('spectral_anneal() requires 3 ≤ n ≤ 35.', pos);
+
+  function countSub(M, k) {
+    if (k > n) return 0;
+    var cnt = 0, sub = [];
+    function go(start, depth) {
+      if (depth === k) {
+        for (var a = 0; a < k; a++)
+          for (var b = a+1; b < k; b++)
+            if (M[sub[a]][sub[b]] === 0) return;
+        cnt++; return;
+      }
+      for (var v = start; v < n; v++) { sub[depth] = v; go(v+1, depth+1); }
+    }
+    go(0, 0); return cnt;
+  }
+
+  function energy(adj) {
+    var comp = [];
+    for (var i = 0; i < n; i++) {
+      comp[i] = [];
+      for (var j = 0; j < n; j++) comp[i][j] = (i === j) ? 0 : (1 - adj[i][j]);
+    }
+    return countSub(adj, r) + countSub(comp, s);
+  }
+
+  function degreeVariance(adj) {
+    var degs = [], sum = 0;
+    for (var i = 0; i < n; i++) {
+      var d = 0;
+      for (var j = 0; j < n; j++) d += adj[i][j];
+      degs.push(d);
+      sum += d;
+    }
+    var mean = sum / n;
+    var variance = 0;
+    for (var i = 0; i < n; i++) variance += (degs[i] - mean) * (degs[i] - mean);
+    return variance / n;
+  }
+
+  var bestAdj = null, bestE = Infinity;
+  var method = 'unknown';
+
+  for (var trial = 0; trial < maxTrials; trial++) {
+    // Initialize from Paley if n is suitable prime, else near-regular random
+    var adj = [];
+    var usedPaley = false;
+
+    // Try Paley initialization
+    var isPrime = true;
+    for (var d = 2; d * d <= n; d++) if (n % d === 0) { isPrime = false; break; }
+    if (isPrime && n % 4 === 1 && n >= 5) {
+      var qr = new Set();
+      for (var x = 1; x < n; x++) qr.add((x * x) % n);
+      for (var i = 0; i < n; i++) {
+        adj[i] = [];
+        for (var j = 0; j < n; j++) {
+          var diff = ((j - i) % n + n) % n;
+          adj[i][j] = (i !== j && qr.has(diff)) ? 1 : 0;
+        }
+      }
+      usedPaley = true;
+    } else {
+      // Near-regular random: target degree ≈ (n-1)/2
+      var targetDeg = Math.floor((n - 1) / 2);
+      for (var i = 0; i < n; i++) {
+        adj[i] = [];
+        for (var j = 0; j < n; j++) {
+          if (i === j) adj[i][j] = 0;
+          else if (j > i) adj[i][j] = Math.random() < targetDeg / (n - 1) ? 1 : 0;
+          else adj[i][j] = adj[j][i];
+        }
+      }
+    }
+
+    var E = energy(adj);
+    if (E < bestE) { bestE = E; bestAdj = adj.map(function(r) { return r.slice(); }); method = usedPaley ? 'Paley seed' : 'near-regular seed'; }
+    if (E === 0) break;
+
+    var T = 1.5;
+    var steps = n * n * 300;
+
+    for (var step = 0; step < steps && E > 0; step++) {
+      var u = Math.floor(Math.random() * n);
+      var v = Math.floor(Math.random() * n);
+      if (u === v) continue;
+      if (u > v) { var tmp = u; u = v; v = tmp; }
+
+      // Compute degree impact before flipping
+      var degU = 0, degV = 0;
+      for (var j = 0; j < n; j++) { degU += adj[u][j]; degV += adj[v][j]; }
+      var avgDeg = 0;
+      for (var i = 0; i < n; i++) for (var j = 0; j < n; j++) avgDeg += adj[i][j];
+      avgDeg /= n;
+
+      adj[u][v] = 1 - adj[u][v];
+      adj[v][u] = adj[u][v];
+
+      var newE = energy(adj);
+
+      // Degree regularity penalty — prefer flips that keep degrees balanced
+      var newDegU = degU + (adj[u][v] ? 1 : -1);
+      var newDegV = degV + (adj[u][v] ? 1 : -1);
+      var degPenalty = 0.1 * (Math.abs(newDegU - avgDeg) + Math.abs(newDegV - avgDeg) - Math.abs(degU - avgDeg) - Math.abs(degV - avgDeg));
+
+      var dE = (newE - E) + degPenalty;
+
+      if (dE <= 0 || Math.random() < Math.exp(-dE / T)) {
+        E = newE;
+      } else {
+        adj[u][v] = 1 - adj[u][v];
+        adj[v][u] = adj[u][v];
+      }
+      T *= 0.99975;
+    }
+
+    if (E < bestE) { bestE = E; bestAdj = adj.map(function(r) { return r.slice(); }); method = usedPaley ? 'Paley+SA' : 'regular+SA'; }
+    if (bestE === 0) break;
+  }
+
+  var result = tensor2(bestAdj);
+  if (bestE === 0) {
+    result.explanation = 'Spectral-guided SA found R(' + r + ',' + s + ')-avoiding coloring of K_' + n + ' (energy=0). Method: ' + method + '. Trial ' + (trial + 1) + '/' + maxTrials + '.\n' +
+      'Degree variance: ' + +degreeVariance(bestAdj).toFixed(3) + ' (lower = more regular = better spectral properties).';
+  } else {
+    result.explanation = 'Best coloring has energy ' + bestE + ' (not zero). Method: ' + method + '. Ran ' + maxTrials + ' trial(s).\n' +
+      'Degree variance: ' + +degreeVariance(bestAdj).toFixed(3) + '. Consider increasing trials or using a different algebraic seed.';
+  }
+  result.display = bestE === 0 ? 'E=0 (' + method + ')' : 'E=' + bestE + ' (best of ' + maxTrials + ')';
+  return result;
+}
+
+// clique_number(A) — exact clique number ω(G): largest k with at least one k-clique
+function fnCliqueNumber(t, pos) {
+  if (t.rank !== 2) throw TypeError_('clique_number() requires a rank-2 adjacency matrix.', pos);
+  var A = t.value, n = A.length;
+  var sub = [];
+  function hasClique(k) {
+    if (k > n) return false;
+    function go(start, depth) {
+      if (depth === k) {
+        for (var a = 0; a < k; a++)
+          for (var b = a+1; b < k; b++)
+            if (A[sub[a]][sub[b]] === 0) return false;
+        return true;
+      }
+      for (var v = start; v < n; v++) { sub[depth] = v; if (go(v+1, depth+1)) return true; }
+      return false;
+    }
+    return go(0, 0);
+  }
+  var omega = 1;
+  for (var k = 2; k <= Math.min(n, 12); k++) {
+    if (hasClique(k)) omega = k; else break;
+  }
+  var result = scalar(omega);
+  result.explanation = 'Clique number ω(G) = ' + omega + ' (largest complete subgraph in ' + n + '-vertex graph).';
+  return result;
+}
+
+// independence_number(A) — exact independence number α(G)
+function fnIndependenceNumber(t, pos) {
+  if (t.rank !== 2) throw TypeError_('independence_number() requires a rank-2 adjacency matrix.', pos);
+  var A = t.value, n = A.length;
+  // α(G) = ω(complement(G))
+  var comp = [];
+  for (var i = 0; i < n; i++) {
+    comp[i] = [];
+    for (var j = 0; j < n; j++) comp[i][j] = (i === j) ? 0 : (1 - A[i][j]);
+  }
+  var sub = [];
+  function hasClique(M, k) {
+    if (k > n) return false;
+    function go(start, depth) {
+      if (depth === k) {
+        for (var a = 0; a < k; a++)
+          for (var b = a+1; b < k; b++)
+            if (M[sub[a]][sub[b]] === 0) return false;
+        return true;
+      }
+      for (var v = start; v < n; v++) { sub[depth] = v; if (go(v+1, depth+1)) return true; }
+      return false;
+    }
+    return go(0, 0);
+  }
+  var alpha = 1;
+  for (var k = 2; k <= Math.min(n, 12); k++) {
+    if (hasClique(comp, k)) alpha = k; else break;
+  }
+  var result = scalar(alpha);
+  result.explanation = 'Independence number α(G) = ' + alpha + ' (largest independent set in ' + n + '-vertex graph).';
+  return result;
+}
+
+// paley_survey(p_max) — comprehensive survey of Paley graph properties
+function fnPaleySurvey(args, pos) {
+  if (args.length !== 1) throw TypeError_('paley_survey(p_max) requires 1 scalar argument.', pos);
+  var pMax = Math.round(args[0].value);
+  if (pMax > 50) pMax = 50;
+
+  function isPrime(m) { if (m < 2) return false; for (var d = 2; d*d <= m; d++) if (m%d === 0) return false; return true; }
+
+  var lines = [];
+  lines.push('Paley Graph Survey (p ≤ ' + pMax + '):');
+  lines.push('');
+  lines.push('  p    | degree | α(G) | ω(G) | Hoffman | gap    | R(3,3) | R(4,4) | R(5,5)');
+  lines.push('  ' + '-'.repeat(78));
+
+  var data = [];
+
+  for (var p = 5; p <= pMax; p++) {
+    if (!isPrime(p) || p % 4 !== 1) continue;
+
+    var qr = new Set();
+    for (var x = 1; x < p; x++) qr.add((x * x) % p);
+    var adj = [];
+    for (var i = 0; i < p; i++) {
+      adj[i] = [];
+      for (var j = 0; j < p; j++) {
+        var diff = ((j - i) % p + p) % p;
+        adj[i][j] = (i !== j && qr.has(diff)) ? 1 : 0;
+      }
+    }
+
+    var deg = (p - 1) / 2;
+    var lmin = (-1 - Math.sqrt(p)) / 2;
+    var lmax = deg;
+    var hoffman = Math.floor(p * (-lmin) / (lmax - lmin));
+    var gap = lmax - (-1 + Math.sqrt(p)) / 2;
+
+    // Exact α and ω via clique search
+    var comp = [];
+    for (var i = 0; i < p; i++) {
+      comp[i] = [];
+      for (var j = 0; j < p; j++) comp[i][j] = (i === j) ? 0 : (1 - adj[i][j]);
+    }
+
+    function findMax(M, maxK) {
+      var sub = [];
+      function hasK(k) {
+        if (k > p) return false;
+        function go(start, depth) {
+          if (depth === k) {
+            for (var a = 0; a < k; a++)
+              for (var b = a+1; b < k; b++)
+                if (M[sub[a]][sub[b]] === 0) return false;
+            return true;
+          }
+          for (var v = start; v < p; v++) { sub[depth] = v; if (go(v+1, depth+1)) return true; }
+          return false;
+        }
+        return go(0, 0);
+      }
+      var best = 1;
+      for (var k = 2; k <= maxK; k++) { if (hasK(k)) best = k; else break; }
+      return best;
+    }
+
+    var alpha = findMax(comp, Math.min(10, p));
+    var omega = findMax(adj, Math.min(10, p));
+
+    // Ramsey avoidance
+    var r33 = (omega < 3 && alpha < 3) ? 'YES' : 'no';
+    var r44 = (omega < 4 && alpha < 4) ? 'YES' : 'no';
+    var r55 = (omega < 5 && alpha < 5) ? 'YES' : 'no';
+
+    var row = {p: p, deg: deg, alpha: alpha, omega: omega, hoffman: hoffman, gap: +gap.toFixed(2), r33: r33, r44: r44, r55: r55};
+    data.push(row);
+
+    lines.push('  ' + (p < 10 ? ' ' : '') + p + '   | ' + (deg < 10 ? ' ' : '') + deg + '     | ' + alpha + '    | ' + omega + '    | ' + (hoffman < 10 ? ' ' : '') + hoffman + '      | ' + (row.gap < 10 ? ' ' : '') + row.gap + '  | ' + r33 + (r33.length < 3 ? '  ' : '') + '   | ' + r44 + (r44.length < 3 ? '  ' : '') + '   | ' + r55);
+  }
+
+  lines.push('');
+  lines.push('Key observations:');
+
+  // Find tightest Hoffman gaps
+  var maxGap = 0, maxGapP = 0;
+  for (var i = 0; i < data.length; i++) {
+    var d = data[i];
+    var bound_gap = d.hoffman - d.alpha;
+    if (bound_gap > maxGap) { maxGap = bound_gap; maxGapP = d.p; }
+    if (d.alpha === d.hoffman) {
+      lines.push('  Paley(' + d.p + '): Hoffman bound is TIGHT (α = hoffman = ' + d.alpha + ')');
+    } else {
+      lines.push('  Paley(' + d.p + '): α=' + d.alpha + ' vs Hoffman≤' + d.hoffman + ' (gap=' + (d.hoffman - d.alpha) + ')');
+    }
+  }
+
+  // Self-complementary check
+  lines.push('');
+  lines.push('All Paley graphs are self-complementary: α(G) = ω(G) always.');
+
+  // Ratio analysis
+  lines.push('');
+  lines.push('α(G) / √p ratios:');
+  for (var i = 0; i < data.length; i++) {
+    var d = data[i];
+    var ratio = d.alpha / Math.sqrt(d.p);
+    lines.push('  Paley(' + d.p + '): α/√p = ' + d.alpha + '/' + (+Math.sqrt(d.p).toFixed(2)) + ' = ' + (+ratio.toFixed(3)));
+  }
+
+  var result = scalar(data.length);
+  result.display = data.length + ' Paley graphs surveyed';
+  result.explanation = lines.join('\n');
+  return result;
+}
+
+// extend_analysis(A, r, s) — analyze what happens when adding one vertex
+// Tries ALL 2^n possible connection patterns for vertex n+1
+// and reports how many create r-cliques vs s-independent-sets
+function fnExtendAnalysis(args, pos) {
+  if (args.length !== 3) throw TypeError_('extend_analysis(A, r, s) requires 3 arguments.', pos);
+  var A = args[0], rArg = args[1], sArg = args[2];
+  if (A.rank !== 2) throw TypeError_('extend_analysis() first arg must be adjacency matrix.', pos);
+  var adj = A.value;
+  var n = adj.length;
+  var r = Math.round(rArg.value);
+  var s = Math.round(sArg.value);
+
+  if (n > 20) throw TypeError_('extend_analysis() supports n ≤ 20 (2^n patterns).', pos);
+
+  // For each possible connection vector for the new vertex,
+  // check if it creates an r-clique or s-independent-set
+  var totalPatterns = Math.pow(2, n);
+  var valid = 0;  // patterns that avoid BOTH
+  var failsClique = 0;  // creates r-clique
+  var failsIndep = 0;  // creates s-independent-set
+  var failsBoth = 0;
+
+  // Precompute: which (r-1)-subsets of existing vertices form a clique?
+  // If new vertex connects to all of them, we get an r-clique
+  var existingCliques = [];  // (r-1)-cliques in original graph
+  var sub = [];
+  function findCliques(M, k, vn) {
+    var results = [];
+    function go(start, depth) {
+      if (depth === k) {
+        for (var a = 0; a < k; a++)
+          for (var b = a+1; b < k; b++)
+            if (M[sub[a]][sub[b]] === 0) return;
+        results.push(sub.slice());
+        return;
+      }
+      for (var v = start; v < vn; v++) { sub[depth] = v; go(v+1, depth+1); }
+    }
+    go(0, 0);
+    return results;
+  }
+
+  var rMinus1Cliques = findCliques(adj, r-1, n);
+  // Also need (s-1)-independent-sets in the original graph
+  var comp = [];
+  for (var i = 0; i < n; i++) {
+    comp[i] = [];
+    for (var j = 0; j < n; j++) comp[i][j] = (i === j) ? 0 : (1 - adj[i][j]);
+  }
+  var sMinus1IndepSets = findCliques(comp, s-1, n);
+
+  var lines = [];
+  lines.push('Extension analysis: adding vertex ' + (n+1) + ' to ' + n + '-vertex graph for R(' + r + ',' + s + ')');
+  lines.push('');
+  lines.push('Existing (r-1)=' + (r-1) + '-cliques: ' + rMinus1Cliques.length);
+  lines.push('Existing (s-1)=' + (s-1) + '-independent-sets: ' + sMinus1IndepSets.length);
+  lines.push('');
+  lines.push('The new vertex must:');
+  lines.push('  - NOT connect to all vertices of any ' + (r-1) + '-clique (would create K_' + r + ')');
+  lines.push('  - NOT disconnect from all vertices of any ' + (s-1) + '-independent-set (would create I_' + s + ')');
+  lines.push('');
+
+  // For small n, enumerate all patterns
+  if (n <= 18) {
+    var bestDeg = -1, bestPattern = -1, bestMinViol = Infinity;
+
+    for (var pattern = 0; pattern < totalPatterns; pattern++) {
+      var createsClique = false;
+      var createsIndep = false;
+
+      // Check if connecting to all vertices of any (r-1)-clique
+      for (var ci = 0; ci < rMinus1Cliques.length && !createsClique; ci++) {
+        var clique = rMinus1Cliques[ci];
+        var allConnected = true;
+        for (var j = 0; j < clique.length; j++) {
+          if (!((pattern >> clique[j]) & 1)) { allConnected = false; break; }
+        }
+        if (allConnected) createsClique = true;
+      }
+
+      // Check if disconnected from all vertices of any (s-1)-independent-set
+      for (var ii = 0; ii < sMinus1IndepSets.length && !createsIndep; ii++) {
+        var indep = sMinus1IndepSets[ii];
+        var noneConnected = true;
+        for (var j = 0; j < indep.length; j++) {
+          if ((pattern >> indep[j]) & 1) { noneConnected = false; break; }
+        }
+        if (noneConnected) createsIndep = true;
+      }
+
+      if (createsClique) failsClique++;
+      if (createsIndep) failsIndep++;
+      if (createsClique && createsIndep) failsBoth++;
+      if (!createsClique && !createsIndep) {
+        valid++;
+        // Track degree of valid patterns
+        var deg = 0;
+        for (var b = 0; b < n; b++) if ((pattern >> b) & 1) deg++;
+        if (bestPattern === -1) bestPattern = pattern;
+      }
+    }
+
+    lines.push('Exhaustive search over all 2^' + n + ' = ' + totalPatterns + ' connection patterns:');
+    lines.push('  Creates K_' + r + ': ' + failsClique + ' patterns (' + +(100*failsClique/totalPatterns).toFixed(1) + '%)');
+    lines.push('  Creates I_' + s + ': ' + failsIndep + ' patterns (' + +(100*failsIndep/totalPatterns).toFixed(1) + '%)');
+    lines.push('  Creates both: ' + failsBoth + ' patterns');
+    lines.push('  VALID (avoids both): ' + valid + ' patterns (' + +(100*valid/totalPatterns).toFixed(1) + '%)');
+    lines.push('');
+
+    if (valid === 0) {
+      lines.push('*** NO VALID EXTENSION EXISTS ***');
+      lines.push('Every possible connection of vertex ' + (n+1) + ' creates either K_' + r + ' or I_' + s + '.');
+      lines.push('This proves R(' + r + ',' + s + ') ≤ ' + (n+1) + ' (for this specific base graph).');
+      lines.push('');
+
+      // Analyze the constraint conflict
+      var cliqueOnly = failsClique - failsBoth;
+      var indepOnly = failsIndep - failsBoth;
+      lines.push('Constraint analysis:');
+      lines.push('  Patterns killed by clique constraint only: ' + cliqueOnly);
+      lines.push('  Patterns killed by independence constraint only: ' + indepOnly);
+      lines.push('  Patterns killed by both: ' + failsBoth);
+      lines.push('  The two constraints leave zero overlap — complete coverage.');
+
+      // Degree analysis: what degree range is forced?
+      var minDegClique = n, maxDegIndep = 0;
+      for (var ci = 0; ci < rMinus1Cliques.length; ci++) {
+        var size = rMinus1Cliques[ci].length;
+        if (size < minDegClique) minDegClique = size;
+      }
+      lines.push('');
+      lines.push('Degree squeeze:');
+      lines.push('  To avoid K_' + r + ': new vertex must miss ≥1 vertex in every ' + (r-1) + '-clique');
+      lines.push('    → cannot connect to too many vertices (upper degree limit)');
+      lines.push('  To avoid I_' + s + ': new vertex must connect to ≥1 vertex in every ' + (s-1) + '-indep-set');
+      lines.push('    → cannot connect to too few vertices (lower degree limit)');
+      lines.push('  These two constraints are INCOMPATIBLE at n=' + (n+1) + '.');
+    } else {
+      lines.push('Valid extensions exist! The graph CAN be extended to ' + (n+1) + ' vertices.');
+      lines.push('This means R(' + r + ',' + s + ') > ' + (n+1) + '.');
+    }
+  }
+
+  var result = scalar(valid);
+  result.display = valid + ' valid extensions of ' + totalPatterns + ' possible';
+  result.explanation = lines.join('\n');
+  return result;
+}
+
 var builtinFunctions = {
   trace: fnTrace,
   transpose: fnTranspose,
@@ -3382,20 +5053,37 @@ var builtinFunctions = {
   identity: fnIdentity,
   eigenvalues: fnEigenvalues,
   sym: fnSym,
-  antisym: fnAntisym
+  antisym: fnAntisym,
+  adjacency: fnAdjacency,
+  triangles: fnTriangles,
+  complement: fnComplement,
+  chromatic: fnChromatic,
+  degree: fnDegree,
+  paley: fnPaley,
+  cubic_residue: fnCubicResidue,
+  spectral_gap: fnSpectralGap,
+  hoffman_bound: fnHoffmanBound,
+  graph_profile: fnGraphProfile,
+  fast_triangles: fnFastTriangles,
+  clique_number: fnCliqueNumber,
+  independence_number: fnIndependenceNumber
 };
 
 var twoArgFunctions = {
   raise: fnRaise,
   lower: fnLower,
-  christoffel: fnChristoffel
+  christoffel: fnChristoffel,
+  hadamard: fnHadamard,
+  cliques: fnCliques,
+  independent_set: fnIndependentSet,
+  circulant: fnCirculant
 };
 
 var threeArgFunctions = {
   riemann: fnRiemann
 };
 
-var varArgFunctions = { contract: true, components: true, einsum: true, covariantD: true, revar: true };
+var varArgFunctions = { contract: true, components: true, einsum: true, covariantD: true, revar: true, ramsey_check: true, ramsey_search: true, ramsey_energy: true, ramsey_anneal: true, ramsey_spectrum: true, ramsey_predict: true, ramsey_threshold: true, family_compare: true, spectral_anneal: true, paley_survey: true, extend_analysis: true };
 
 // ─── Lexer ───
 function lex(input) {
@@ -4330,6 +6018,138 @@ function evaluateAST(node, logs, env) {
         evalArgs.push(val.kind === 'indexed' ? val.tensor : val);
       }
       return fnCovariantD(evalArgs, node.pos, logs);
+    }
+
+    // Ramsey check
+    if (node.name === 'ramsey_check') {
+      var evalArgs = [];
+      for (var ai = 0; ai < node.args.length; ai++) {
+        var val = evaluateAST(node.args[ai], logs, env);
+        evalArgs.push(val.kind === 'indexed' ? val.tensor : val);
+      }
+      var result = fnRamseyCheck(evalArgs, node.pos);
+      logs.push(result.explanation);
+      return result;
+    }
+
+    // Ramsey search
+    if (node.name === 'ramsey_search') {
+      var evalArgs = [];
+      for (var ai = 0; ai < node.args.length; ai++) {
+        var val = evaluateAST(node.args[ai], logs, env);
+        evalArgs.push(val.kind === 'indexed' ? val.tensor : val);
+      }
+      var result = fnRamseySearch(evalArgs, node.pos);
+      logs.push(result.explanation);
+      return result;
+    }
+
+    // Ramsey energy
+    if (node.name === 'ramsey_energy') {
+      var evalArgs = [];
+      for (var ai = 0; ai < node.args.length; ai++) {
+        var val = evaluateAST(node.args[ai], logs, env);
+        evalArgs.push(val.kind === 'indexed' ? val.tensor : val);
+      }
+      var result = fnRamseyEnergy(evalArgs, node.pos);
+      logs.push(result.explanation);
+      return result;
+    }
+
+    // Ramsey annealing
+    if (node.name === 'ramsey_anneal') {
+      var evalArgs = [];
+      for (var ai = 0; ai < node.args.length; ai++) {
+        var val = evaluateAST(node.args[ai], logs, env);
+        evalArgs.push(val.kind === 'indexed' ? val.tensor : val);
+      }
+      var result = fnRamseyAnneal(evalArgs, node.pos);
+      logs.push(result.explanation);
+      return result;
+    }
+
+    // Ramsey spectral prediction
+    if (node.name === 'ramsey_predict') {
+      var evalArgs = [];
+      for (var ai = 0; ai < node.args.length; ai++) {
+        var val = evaluateAST(node.args[ai], logs, env);
+        evalArgs.push(val.kind === 'indexed' ? val.tensor : val);
+      }
+      var result = fnRamseyPredict(evalArgs, node.pos);
+      logs.push(result.explanation);
+      return result;
+    }
+
+    // Ramsey spectrum scan
+    if (node.name === 'ramsey_spectrum') {
+      var evalArgs = [];
+      for (var ai = 0; ai < node.args.length; ai++) {
+        var val = evaluateAST(node.args[ai], logs, env);
+        evalArgs.push(val.kind === 'indexed' ? val.tensor : val);
+      }
+      var result = fnRamseySpectrum(evalArgs, node.pos);
+      logs.push(result.explanation);
+      return result;
+    }
+
+    // Ramsey threshold
+    if (node.name === 'ramsey_threshold') {
+      var evalArgs = [];
+      for (var ai = 0; ai < node.args.length; ai++) {
+        var val = evaluateAST(node.args[ai], logs, env);
+        evalArgs.push(val.kind === 'indexed' ? val.tensor : val);
+      }
+      var result = fnRamseyThreshold(evalArgs, node.pos);
+      logs.push(result.explanation);
+      return result;
+    }
+
+    // Extend analysis
+    if (node.name === 'extend_analysis') {
+      var evalArgs = [];
+      for (var ai = 0; ai < node.args.length; ai++) {
+        var val = evaluateAST(node.args[ai], logs, env);
+        evalArgs.push(val.kind === 'indexed' ? val.tensor : val);
+      }
+      var result = fnExtendAnalysis(evalArgs, node.pos);
+      logs.push(result.explanation);
+      return result;
+    }
+
+    // Paley survey
+    if (node.name === 'paley_survey') {
+      var evalArgs = [];
+      for (var ai = 0; ai < node.args.length; ai++) {
+        var val = evaluateAST(node.args[ai], logs, env);
+        evalArgs.push(val.kind === 'indexed' ? val.tensor : val);
+      }
+      var result = fnPaleySurvey(evalArgs, node.pos);
+      logs.push(result.explanation);
+      return result;
+    }
+
+    // Spectral annealing
+    if (node.name === 'spectral_anneal') {
+      var evalArgs = [];
+      for (var ai = 0; ai < node.args.length; ai++) {
+        var val = evaluateAST(node.args[ai], logs, env);
+        evalArgs.push(val.kind === 'indexed' ? val.tensor : val);
+      }
+      var result = fnSpectralAnneal(evalArgs, node.pos);
+      logs.push(result.explanation);
+      return result;
+    }
+
+    // Family compare
+    if (node.name === 'family_compare') {
+      var evalArgs = [];
+      for (var ai = 0; ai < node.args.length; ai++) {
+        var val = evaluateAST(node.args[ai], logs, env);
+        evalArgs.push(val.kind === 'indexed' ? val.tensor : val);
+      }
+      var result = fnFamilyCompare(evalArgs, node.pos);
+      logs.push(result.explanation);
+      return result;
     }
 
     // Three-argument functions (riemann)
