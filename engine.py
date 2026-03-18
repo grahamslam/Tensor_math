@@ -90,8 +90,9 @@ def degree(A):
 
 def triangles(A):
     """Triangle count via trace(A³)/6."""
-    A2 = A @ A
-    return int(np.trace(A2 @ A)) // 6
+    A64 = A.astype(np.int64)
+    A2 = A64 @ A64
+    return int(np.trace(A2 @ A64)) // 6
 
 
 def eigenvalues(A):
