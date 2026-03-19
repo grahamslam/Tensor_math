@@ -467,8 +467,47 @@ Paley(37) avoids R(5,5) with α=ω=4, confirmed in 0.4 seconds. This 37-vertex g
 
 SA at n=38+ is computationally expensive (O(n^5) per energy evaluation) and would require parallelized or compiled implementations to push further.
 
+## Finding 9: R(5,5) Avoiders Verified Through n=41
+
+### Results (March 19, 2026)
+
+Using a multi-phase search combining circulant graph construction with targeted edge SA, we verified R(5,5)-avoiding graphs at every size from n=37 through n=41:
+
+| n  | Method | Time | Full Violations | Notes |
+|----|--------|------|-----------------|-------|
+| 37 | Paley(37) | 0.4s | 0 | Quadratic residue graph, degree-18 |
+| 38 | Circulant | 40.6s | 0 | Diffs={2,3,10,11,13,15,16,17,18,19}, degree-19 |
+| 39 | Hybrid (circulant + edge SA) | 43.0s | 0 | Circulant seed E_vt=5, edge SA closed 39 full violations |
+| 40 | Pure circulant | Phase 1 | 0 | Found during random sampling |
+| 41 | Pure circulant | Phase 1 | 0 | Found during random sampling |
+
+All results stored in `results.json` with full adjacency matrices for independent verification.
+
+### Approach Evolution
+
+1. **Pure O(n^5) SA** -- too slow (2 steps/sec at n=39). Full 5-clique enumeration per step.
+2. **Sampled energy** -- fast but dishonest. 200 samples covers 0.035% of C(39,5) space. Reported E=0.14 when actual E=291.
+3. **Hoffman bound spectral SA** -- O(n^3) but bound too loose. Hoffman gives alpha<=9 when actual alpha=4.
+4. **Pair-delta SA** -- O(n^3) exact delta per flip. ~250 steps/sec. Honest but random.
+5. **Circulant restriction** -- search 2^(n/2) difference sets instead of 2^(n(n-1)/2) general graphs. Found n=38 in 40s, n=40 and n=41 as pure circulants.
+6. **Multi-phase pipeline** -- Phase 1 (random circulant sampling) + Phase 2 (difference-set SA) + Phase 3 (symmetry-breaking edge SA from best circulant). Critical insight: start Phase 3 with low temperature (T=0.3) to avoid scrambling the circulant structure.
+7. **Targeted SA** (AlphaEvolve-inspired) -- maintain explicit violation sets, update incrementally on each flip. 9000 steps/sec. Pick edges that participate in violations.
+8. **Greedy descent** -- evaluate ALL candidate flips, pick the best. Discovered circulant seed for n=42 is a **greedy trap** (zero improving flips).
+
+### The n=42 Wall
+
+n=42 represents a qualitative difficulty jump:
+
+- **Best circulant**: E_vt=15 (vs 5 for n=39), 126 full violations (vs 39 for n=39), all K5 (zero I5)
+- **Greedy trap**: Zero improving single-edge flips from the best circulant. Every edge removal that breaks a K5 creates more I5s.
+- **SA plateau**: Targeted SA reaches ~82-104 violations but cannot converge to zero across 30 restarts.
+- **Extension from n=41**: 1025 4-cliques and 1025 4-indep-sets in base graph. Best extension has ~62 new-vertex violations.
+- **Prediction**: Finding 7's extension phase transition at ~78% of R(r,s) predicts closure at n~34, consistent with difficulty at n=42.
+
+Likely requires non-circulant algebraic constructions (cubic residue graphs, Cayley graphs) or global restructuring methods (harmonic tunneling, orbit-based mutation) as described in the AlphaEvolve paper (Nagda et al., 2026).
+
 ---
 
 ## Reproducibility
 
-All results can be reproduced by opening `index.html` in any modern browser and entering the expressions listed above. No installation, compilation, or external dependencies required.
+Spectral findings can be reproduced by opening `index.html` in any modern browser. R(5,5) search results are stored in `results.json` with full adjacency matrices — verify with any 5-clique enumeration tool. Python scripts in the repo root reproduce all search phases.

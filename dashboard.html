@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>R(5,5) Search Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #0a0a0f; color: #e0e0e0; font-family: 'Consolas', 'Monaco', monospace; padding: 16px; }
+h1 { color: #00ccff; font-size: 20px; margin-bottom: 12px; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+.card { background: #12121a; border: 1px solid #222; border-radius: 8px; padding: 14px; }
+.card h2 { color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+.big-num { font-size: 36px; font-weight: bold; }
+.stat-row { display: flex; justify-content: space-between; margin: 4px 0; font-size: 13px; }
+.stat-label { color: #666; }
+.stat-val { color: #ccc; font-weight: bold; }
+.good { color: #00ff88; }
+.warn { color: #ffaa00; }
+.bad { color: #ff4466; }
+.chart-wrap { background: #12121a; border: 1px solid #222; border-radius: 8px; padding: 14px; margin-bottom: 12px; }
+.chart-wrap h2 { color: #888; font-size: 12px; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+canvas { width: 100% !important; }
+.status-bar { display: flex; gap: 16px; align-items: center; margin-bottom: 12px; font-size: 13px; }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.status-dot.live { background: #00ff88; animation: pulse 1s infinite; }
+.status-dot.stale { background: #ff4466; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+.progress-bar { height: 6px; background: #222; border-radius: 3px; overflow: hidden; flex: 1; }
+.progress-fill { height: 100%; background: linear-gradient(90deg, #00ccff, #00ff88); transition: width 0.5s; }
+.view-toggle { display: flex; gap: 8px; margin-bottom: 12px; }
+.view-toggle button { background: #1a1a2a; border: 1px solid #333; color: #888; padding: 4px 12px;
+  border-radius: 4px; cursor: pointer; font-family: inherit; font-size: 12px; }
+.view-toggle button.active { background: #00ccff22; border-color: #00ccff; color: #00ccff; }
+#log { background: #0a0a0f; border: 1px solid #222; border-radius: 8px; padding: 10px; font-size: 11px;
+       max-height: 150px; overflow-y: auto; color: #666; white-space: pre; }
+</style>
+</head>
+<body>
+<h1>R(5,5) Ramsey Search -- Live Dashboard</h1>
+
+<div class="status-bar">
+  <span><span class="status-dot" id="statusDot"></span> <span id="statusText">Waiting...</span></span>
+  <span>n=<span id="targetN">--</span></span>
+  <span>Trial <span id="trialNum">--</span></span>
+  <span id="elapsed">--</span>
+  <div class="progress-bar"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+  <span id="pctText">0%</span>
+</div>
+
+<div class="view-toggle">
+  <button id="btnRecent" class="active" onclick="setView('recent')">Last 5 min</button>
+  <button id="btnMedium" onclick="setView('medium')">Last 30 min</button>
+  <button id="btnAll" onclick="setView('all')">All Data</button>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h2>Energy</h2>
+    <div class="big-num" id="energy">--</div>
+    <div class="stat-row"><span class="stat-label">Best (all time)</span><span class="stat-val good" id="bestE">--</span></div>
+    <div class="stat-row"><span class="stat-label">Window Min</span><span class="stat-val" id="winMin">--</span></div>
+    <div class="stat-row"><span class="stat-label">Window Avg</span><span class="stat-val" id="winAvg">--</span></div>
+    <div class="stat-row"><span class="stat-label">Temperature</span><span class="stat-val" id="temp">--</span></div>
+    <div class="stat-row"><span class="stat-label">Accept Rate</span><span class="stat-val" id="acceptRate">--</span></div>
+    <div class="stat-row"><span class="stat-label">Steps/sec</span><span class="stat-val" id="stepRate">--</span></div>
+  </div>
+  <div class="card">
+    <h2>Violations & Structure</h2>
+    <div class="stat-row"><span class="stat-label">K5 (5-cliques)</span><span class="stat-val" id="k5">--</span></div>
+    <div class="stat-row"><span class="stat-label">I5 (5-indep)</span><span class="stat-val" id="i5">--</span></div>
+    <div class="stat-row"><span class="stat-label">K4 (near-miss)</span><span class="stat-val" id="k4">--</span></div>
+    <div class="stat-row"><span class="stat-label">I4 (near-miss)</span><span class="stat-val" id="i4">--</span></div>
+    <div class="stat-row"><span class="stat-label">Deg Variance</span><span class="stat-val" id="degVar">--</span></div>
+    <div class="stat-row"><span class="stat-label">Step</span><span class="stat-val" id="stepNum">--</span></div>
+    <div class="stat-row"><span class="stat-label">Total Steps</span><span class="stat-val" id="totalSteps">--</span></div>
+  </div>
+</div>
+
+<div class="chart-wrap">
+  <h2>Energy Over Time</h2>
+  <canvas id="energyChart" height="220"></canvas>
+</div>
+
+<div class="grid">
+  <div class="chart-wrap">
+    <h2>Near-Misses (K4 + I4 sampled)</h2>
+    <canvas id="nearChart" height="180"></canvas>
+  </div>
+  <div class="chart-wrap">
+    <h2>Temperature & Accept Rate</h2>
+    <canvas id="tempChart" height="180"></canvas>
+  </div>
+</div>
+
+<h2 style="color:#888; font-size:12px; margin:8px 0;">Log</h2>
+<div id="log">Waiting for data...</div>
+
+<script>
+let allData = [];
+let viewMode = 'recent'; // 'recent', 'medium', 'all'
+const VIEW_SECONDS = { recent: 300, medium: 1800, all: Infinity };
+
+function setView(mode) {
+  viewMode = mode;
+  document.querySelectorAll('.view-toggle button').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn' + mode.charAt(0).toUpperCase() + mode.slice(1)).classList.add('active');
+  updateCharts();
+}
+
+function getWindowData() {
+  if (allData.length === 0) return [];
+  if (viewMode === 'all') return allData;
+  const cutoff = allData[allData.length - 1].wall - VIEW_SECONDS[viewMode];
+  return allData.filter(r => r.wall >= cutoff);
+}
+
+function makeChart(id, datasets, opts = {}) {
+  return new Chart(document.getElementById(id), {
+    type: 'line',
+    data: { labels: [], datasets },
+    options: {
+      animation: false,
+      responsive: true,
+      scales: {
+        x: { display: true, grid: { color: '#1a1a2a' }, ticks: { color: '#555', maxTicksLimit: 8, font: { size: 10 } } },
+        ...(opts.scales || { y: { grid: { color: '#1a1a2a' }, ticks: { color: '#666' } } })
+      },
+      plugins: {
+        legend: { labels: { color: '#888', boxWidth: 12, font: { size: 11 } } },
+        ...(opts.plugins || {})
+      },
+      elements: { point: { radius: 0 } }
+    }
+  });
+}
+
+const energyChart = makeChart('energyChart', [
+  { label: 'Energy', data: [], borderColor: '#00ccff', borderWidth: 1.5, tension: 0.2, fill: false },
+  { label: 'Best', data: [], borderColor: '#00ff88', borderWidth: 1.5, borderDash: [6,3], fill: false },
+  { label: 'Rolling Avg (20)', data: [], borderColor: '#ffaa00', borderWidth: 1, borderDash: [2,2], fill: false }
+]);
+
+const nearChart = makeChart('nearChart', [
+  { label: 'K4', data: [], borderColor: '#ffaa00', borderWidth: 1.5, tension: 0.2 },
+  { label: 'I4', data: [], borderColor: '#aaff00', borderWidth: 1.5, tension: 0.2 },
+  { label: 'K4+I4 avg', data: [], borderColor: '#ff6600', borderWidth: 1, borderDash: [3,3] }
+], { scales: { y: { grid: { color: '#1a1a2a' }, ticks: { color: '#666' }, beginAtZero: true } } });
+
+const tempChart = makeChart('tempChart', [
+  { label: 'Temperature', data: [], borderColor: '#cc44ff', borderWidth: 1.5, yAxisID: 'y' },
+  { label: 'Accept Rate', data: [], borderColor: '#44ffcc', borderWidth: 1.5, yAxisID: 'y1' }
+], {
+  scales: {
+    y: { position: 'left', grid: { color: '#1a1a2a' }, ticks: { color: '#cc44ff' }, title: { display: true, text: 'Temp', color: '#cc44ff' } },
+    y1: { position: 'right', grid: { drawOnChartArea: false }, ticks: { color: '#44ffcc' }, min: 0, max: 1, title: { display: true, text: 'Accept', color: '#44ffcc' } }
+  }
+});
+
+function rollingAvg(arr, window) {
+  const out = [];
+  let sum = 0;
+  for (let i = 0; i < arr.length; i++) {
+    sum += arr[i];
+    if (i >= window) sum -= arr[i - window];
+    out.push(sum / Math.min(i + 1, window));
+  }
+  return out;
+}
+
+function downsample(arr, maxPts) {
+  if (arr.length <= maxPts) return arr;
+  const step = arr.length / maxPts;
+  const out = [];
+  for (let i = 0; i < maxPts; i++) out.push(arr[Math.floor(i * step)]);
+  return out;
+}
+
+function formatTime(sec) {
+  if (sec < 60) return Math.round(sec) + 's';
+  if (sec < 3600) return Math.floor(sec/60) + 'm ' + Math.round(sec%60) + 's';
+  return Math.floor(sec/3600) + 'h ' + Math.floor((sec%3600)/60) + 'm';
+}
+
+function updateCharts() {
+  const win = getWindowData();
+  if (win.length === 0) return;
+  const d = downsample(win, 300);
+  const labels = d.map(r => formatTime(r.time));
+
+  const energies = d.map(r => r.E);
+  const avgE = rollingAvg(energies, 20);
+
+  energyChart.data.labels = labels;
+  energyChart.data.datasets[0].data = energies;
+  energyChart.data.datasets[1].data = d.map(r => r.best_E);
+  energyChart.data.datasets[2].data = avgE;
+  energyChart.update();
+
+  const k4s = d.map(r => r.k4);
+  const i4s = d.map(r => r.i4);
+  const combined = d.map(r => r.k4 + r.i4);
+  const avgNear = rollingAvg(combined, 20);
+
+  nearChart.data.labels = labels;
+  nearChart.data.datasets[0].data = k4s;
+  nearChart.data.datasets[1].data = i4s;
+  nearChart.data.datasets[2].data = avgNear;
+  nearChart.update();
+
+  tempChart.data.labels = labels;
+  tempChart.data.datasets[0].data = d.map(r => r.T);
+  tempChart.data.datasets[1].data = d.map(r => r.accept_rate);
+  tempChart.update();
+}
+
+function updateStats(r) {
+  const win = getWindowData();
+  const winE = win.map(x => x.E);
+  const winMin = winE.length ? Math.min(...winE) : 0;
+  const winAvg = winE.length ? winE.reduce((a,b) => a+b, 0) / winE.length : 0;
+
+  document.getElementById('energy').textContent = r.E.toFixed(3);
+  document.getElementById('energy').className = 'big-num ' + (r.k5 + r.i5 === 0 ? (r.E < 1 ? 'good' : 'warn') : 'bad');
+  document.getElementById('bestE').textContent = r.best_E.toFixed(3);
+  document.getElementById('winMin').textContent = winMin.toFixed(3);
+  document.getElementById('winAvg').textContent = winAvg.toFixed(2);
+  document.getElementById('temp').textContent = r.T.toFixed(6);
+  document.getElementById('acceptRate').textContent = (r.accept_rate * 100).toFixed(1) + '%';
+  document.getElementById('k5').textContent = r.k5;
+  document.getElementById('k5').className = 'stat-val ' + (r.k5 === 0 ? 'good' : 'bad');
+  document.getElementById('i5').textContent = r.i5;
+  document.getElementById('i5').className = 'stat-val ' + (r.i5 === 0 ? 'good' : 'bad');
+  document.getElementById('k4').textContent = r.k4;
+  document.getElementById('i4').textContent = r.i4;
+  document.getElementById('degVar').textContent = r.deg_var;
+  document.getElementById('targetN').textContent = r.n;
+  document.getElementById('trialNum').textContent = r.trial;
+  document.getElementById('pctText').textContent = r.pct + '%';
+  document.getElementById('progressFill').style.width = r.pct + '%';
+  document.getElementById('elapsed').textContent = formatTime(r.time);
+  document.getElementById('stepNum').textContent = r.step.toLocaleString();
+  document.getElementById('totalSteps').textContent = r.max_steps.toLocaleString();
+
+  // Compute steps/sec from window
+  if (win.length >= 2) {
+    const dt = win[win.length-1].time - win[0].time;
+    const ds = win[win.length-1].step - win[0].step;
+    document.getElementById('stepRate').textContent = dt > 0 ? Math.round(ds / dt) + '/s' : '--';
+  }
+}
+
+async function poll() {
+  try {
+    const resp = await fetch('/api/progress');
+    const json = await resp.json();
+
+    if (json.lines && json.lines.length > 0) {
+      allData = json.lines;
+      const latest = allData[allData.length - 1];
+      updateStats(latest);
+      updateCharts();
+
+      const dot = document.getElementById('statusDot');
+      const txt = document.getElementById('statusText');
+      const age = Date.now() / 1000 - latest.wall;
+      if (age < 10) {
+        dot.className = 'status-dot live';
+        txt.textContent = 'Running';
+      } else {
+        dot.className = 'status-dot stale';
+        txt.textContent = 'Stale (' + Math.round(age) + 's)';
+      }
+
+      document.getElementById('log').textContent = allData.slice(-10).map(r =>
+        `[${r.pct}% ${formatTime(r.time)}] E=${r.E.toFixed(2)} best=${r.best_E.toFixed(3)} k5=${r.k5} i5=${r.i5} k4=${r.k4} i4=${r.i4} T=${r.T.toFixed(4)} acc=${(r.accept_rate*100).toFixed(0)}%`
+      ).join('\n');
+    }
+  } catch (e) {
+    document.getElementById('statusDot').className = 'status-dot stale';
+    document.getElementById('statusText').textContent = 'Server offline';
+  }
+}
+
+setInterval(poll, 2000);
+poll();
+</script>
+</body>
+</html>
