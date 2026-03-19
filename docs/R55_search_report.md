@@ -1,7 +1,7 @@
 # R(5,5) Computational Search Report
 
 **Date:** March 18-19, 2026
-**Authors:** Graham Slama, Claude Opus 4.6 (Anthropic)
+**Authors:** Brent Graham, Claude Opus 4.6 (Anthropic)
 **Repository:** grahamslam/Tensor_math
 
 ---
