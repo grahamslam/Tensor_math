@@ -24,9 +24,17 @@ Progress at last check (130/328 graphs):
    - If it hits E=0: VERIFY with full count → potentially disproves R(5,5)=43 conjecture
 4. Also try: the complement of that graph (might be even better)
 
-## A second scan is also running
-Scanning graphs 40-65 with 3 restarts each. Task ID: b2bdqg8ih
-This was meant to identify the E=2 graph faster but is also slow.
+## Multi-edge trap breaker COMPLETE — no solution
+Phase 1 (single flip): 230 tested, 0 clean. Best total=2.
+Phase 2 (double flip): 26,335 pairs tested, 0 clean.
+The trap is globally coupled — cannot be broken with up to 3 edge flips.
+
+## Barrier analysis findings
+- The 2 violations are K5s through 4-cliques (10,11,13,28) and (11,13,18,28)
+- They share {11,13,28} — a triangle in the base graph
+- Removing edge (11,28) creates 2 I5s on {5,6,8,11,12,28}
+- The I5s can ONLY be fixed by re-adding (11,28) — single-edge trap is airtight
+- Multi-edge swaps (remove 11,28 + 2 compensating flips) are being tested
 
 ## Context
 - 43 <= R(5,5) <= 46 (current bounds)
