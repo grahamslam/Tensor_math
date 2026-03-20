@@ -96,7 +96,7 @@ if __name__ == '__main__':
         adj = graph6_to_adj(g6)
 
         # Try original
-        E, k5, i5, conn = sa_extension(adj, n_base, num_restarts=3, steps=30000)
+        E, k5, i5, conn = sa_extension(adj, n_base, num_restarts=1, steps=5000)
         results.append({
             'idx': i, 'source': 'original',
             'best_E': E, 'k5': k5, 'i5': i5,
@@ -106,7 +106,7 @@ if __name__ == '__main__':
         # Try complement
         C = 1 - adj.copy()
         np.fill_diagonal(C, 0)
-        Ec, k5c, i5c, connc = sa_extension(C, n_base, num_restarts=3, steps=30000)
+        Ec, k5c, i5c, connc = sa_extension(C, n_base, num_restarts=1, steps=5000)
         results.append({
             'idx': i + 328, 'source': 'complement',
             'best_E': Ec, 'k5': k5c, 'i5': i5c,
