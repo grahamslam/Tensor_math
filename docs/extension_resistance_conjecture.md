@@ -220,9 +220,42 @@ Comparing the most extendable quartile (ER <= 23) to the least extendable quarti
 
 The differences are small in absolute terms but highly statistically significant (p < 1e-10 for the top predictors). The effect sizes suggest that ER is influenced by many factors simultaneously, with no single property being dominant.
 
-### 5.4 Regression Model
+### 5.4 Phase 2: Multivariate Regression (Completed)
 
-*Pending Phase 2 computation — multivariate regression with top predictors*
+**Model comparison:**
+
+| Model | Features | R2 | adj_R2 |
+|-------|----------|-----|--------|
+| Single best | k4_total | 0.110 | 0.108 |
+| Best 2 | k4_total + tri_diff | 0.193 | 0.191 |
+| Best 3 | k4_total + tri_diff + degree_var | 0.254 | 0.251 |
+| All 7 top | k4_total + tri_balance + tri_diff + k4_diff + k4_balance + degree_var + tri_total | 0.257 | 0.249 |
+| Quadratic (top 2) | k4_total + tri_diff + squares + interaction | 0.194 | 0.188 |
+| Top 4 + interactions | 4 features + 6 pairwise interactions | 0.260 | 0.249 |
+
+**Key findings:**
+
+1. **The best 3-predictor model explains 25.4% of ER variance.** The formula is approximately:
+   ```
+   ER ~ a*(k4_total) + b*(tri_diff) + c*(degree_var) + intercept
+   ```
+   Adding more predictors beyond 3 provides diminishing returns (adj_R2 plateaus at ~0.25).
+
+2. **Quadratic and interaction terms do not help.** The quadratic model on the top 2 predictors (R2=0.194) barely improves over the linear model (R2=0.193). Pairwise interactions add almost nothing. The relationship between structural properties and ER is approximately linear, not polynomial.
+
+3. **74% of ER variance is unexplained by structural properties.** The best model leaves 74% of the variance in the residuals (std = 16.3, max absolute error = 60.3). This means that while k4_total, tri_diff, and degree_var are statistically significant predictors, they are insufficient to predict ER for individual graphs.
+
+4. **Extension resistance is not a simple function of macro-structure.** The unexplained 74% likely resides in micro-structural properties — specific arrangements of edges, local vertex neighborhoods, and constraint interaction patterns — that are not captured by aggregate statistics like total clique counts or degree variance.
+
+### 5.5 Interpretation
+
+**What 25% explains:** The macro-structural properties tell us the general difficulty range. Graphs with high k4_total, low tri_diff, and high degree_var tend to be easier to extend. This sets a "baseline difficulty" that accounts for about a quarter of the observed variation.
+
+**What 74% doesn't explain:** The specific extension resistance of individual graphs depends on the exact topology — which vertices participate in which 4-cliques, how constraints interlock locally, whether the constraint graph has bottlenecks or escape routes. Graph 41 achieves ER=2 not because its macro statistics are extreme (they're near the population mean) but because its specific constraint topology happens to have a near-escape.
+
+**Implication for Ramsey search:** Macro statistics can narrow the search space (prefer high k4_total, balanced triangles, higher degree variance) but cannot replace direct extension testing. The final 74% requires constructing and testing specific graphs.
+
+**Implication for the phase transition:** The extension phase transition at ~78% of R(r,s) likely reflects the point where even the most favorable macro-structural configurations cannot overcome the micro-structural constraint density. Below this threshold, some graphs have favorable enough micro-structure to achieve ER=0. Above it, no graph does.
 
 ---
 

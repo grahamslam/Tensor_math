@@ -1,0 +1,39 @@
+{
+  "best_single": {
+    "feature": "k4_total",
+    "R2": 0.1096
+  },
+  "best_pair": {
+    "features": [
+      "k4_total",
+      "tri_diff"
+    ],
+    "R2": 0.1931
+  },
+  "best_triple": {
+    "features": [
+      "k4_total",
+      "tri_diff",
+      "degree_var"
+    ],
+    "R2": 0.2542
+  },
+  "all_top": {
+    "features": [
+      "k4_total",
+      "tri_balance",
+      "tri_diff",
+      "k4_diff",
+      "k4_balance",
+      "degree_var",
+      "tri_total"
+    ],
+    "R2": 0.2571
+  },
+  "quadratic": {
+    "R2": 0.1937
+  },
+  "interactions": {
+    "R2": 0.2602
+  }
+}
