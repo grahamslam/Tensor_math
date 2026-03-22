@@ -1,0 +1,120 @@
+{
+  "n_records": 656,
+  "er_stats": {
+    "min": 2,
+    "max": 83,
+    "mean": 37.59,
+    "median": 31.5,
+    "std": 18.91
+  },
+  "correlations": {
+    "k4_total": {
+      "pearson_r": -0.331,
+      "pearson_p": 3.0842682587022743e-18,
+      "spearman_r": -0.3785,
+      "spearman_p": 8.86878745759729e-24
+    },
+    "tri_balance": {
+      "pearson_r": 0.3239,
+      "pearson_p": 1.7518851295198438e-17,
+      "spearman_r": 0.3416,
+      "spearman_p": 2.1642324666387495e-19
+    },
+    "tri_diff": {
+      "pearson_r": 0.3239,
+      "pearson_p": 1.7471517010143387e-17,
+      "spearman_r": 0.3407,
+      "spearman_p": 2.750152594770335e-19
+    },
+    "k4_diff": {
+      "pearson_r": -0.1981,
+      "pearson_p": 3.1324469113263397e-07,
+      "spearman_r": -0.2436,
+      "spearman_p": 2.582290787723881e-10
+    },
+    "k4_balance": {
+      "pearson_r": -0.1968,
+      "pearson_p": 3.7643758417999257e-07,
+      "spearman_r": -0.2409,
+      "spearman_p": 4.091269562100391e-10
+    },
+    "degree_var": {
+      "pearson_r": -0.2105,
+      "pearson_p": 5.2791907357578645e-08,
+      "spearman_r": -0.2203,
+      "spearman_p": 1.1917052556430146e-08
+    },
+    "tri_total": {
+      "pearson_r": -0.1587,
+      "pearson_p": 4.426301760267905e-05,
+      "spearman_r": -0.1697,
+      "spearman_p": 1.2479636491620899e-05
+    },
+    "triangles_comp": {
+      "pearson_r": -0.0908,
+      "pearson_p": 0.02005808696371502,
+      "spearman_r": -0.0924,
+      "spearman_p": 0.01787097213688837
+    },
+    "spectral_gap": {
+      "pearson_r": 0.0961,
+      "pearson_p": 0.013771177251087367,
+      "spearman_r": 0.0913,
+      "spearman_p": 0.019332786560206056
+    },
+    "i4_indep": {
+      "pearson_r": -0.1019,
+      "pearson_p": 0.009014902397856597,
+      "spearman_r": -0.0875,
+      "spearman_p": 0.02501672153870085
+    },
+    "hoffman": {
+      "pearson_r": -0.074,
+      "pearson_p": 0.058188478195142564,
+      "spearman_r": -0.0745,
+      "spearman_p": 0.0563722775038429
+    },
+    "triangles": {
+      "pearson_r": 0.0628,
+      "pearson_p": 0.10811189461620772,
+      "spearman_r": 0.059,
+      "spearman_p": 0.13102702688765172
+    },
+    "degree_mean": {
+      "pearson_r": 0.047,
+      "pearson_p": 0.22908281393702193,
+      "spearman_r": 0.051,
+      "spearman_p": 0.19215660423354755
+    },
+    "density": {
+      "pearson_r": 0.0476,
+      "pearson_p": 0.22369934868297234,
+      "spearman_r": 0.051,
+      "spearman_p": 0.19215660423354755
+    },
+    "edges": {
+      "pearson_r": 0.0475,
+      "pearson_p": 0.224202048598951,
+      "spearman_r": 0.051,
+      "spearman_p": 0.19215660423354755
+    },
+    "lambda_min": {
+      "pearson_r": 0.0348,
+      "pearson_p": 0.37317154147406834,
+      "spearman_r": 0.042,
+      "spearman_p": 0.2823131618084045
+    },
+    "lambda_max": {
+      "pearson_r": 0.0414,
+      "pearson_p": 0.29000925564149527,
+      "spearman_r": 0.0299,
+      "spearman_p": 0.4449830012873004
+    },
+    "k4_cliques": {
+      "pearson_r": 0.0013,
+      "pearson_p": 0.9742088832683112,
+      "spearman_r": -0.011,
+      "spearman_p": 0.7780905336327864
+    }
+  }
+}
