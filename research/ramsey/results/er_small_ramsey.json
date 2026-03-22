@@ -1,0 +1,67 @@
+{
+  "R(3,3)_n4": {
+    "r": 3,
+    "s": 3,
+    "R_value": 6,
+    "n": 4,
+    "ratio": 0.667,
+    "num_avoiding": 18,
+    "er_min": 0,
+    "er_max": 1,
+    "er_mean": 0.33,
+    "er_zero_count": 12,
+    "er_zero_pct": 66.7
+  },
+  "R(3,3)_n5": {
+    "r": 3,
+    "s": 3,
+    "R_value": 6,
+    "n": 5,
+    "ratio": 0.833,
+    "num_avoiding": 12,
+    "er_min": 2,
+    "er_max": 2,
+    "er_mean": 2.0,
+    "er_zero_count": 0,
+    "er_zero_pct": 0.0
+  },
+  "R(3,4)_n6": {
+    "r": 3,
+    "s": 4,
+    "R_value": 9,
+    "n": 6,
+    "ratio": 0.667,
+    "num_avoiding": 2812,
+    "er_min": 0,
+    "er_max": 1,
+    "er_mean": 0.02,
+    "er_zero_count": 2742,
+    "er_zero_pct": 97.5
+  },
+  "R(3,4)_n7": {
+    "r": 3,
+    "s": 4,
+    "R_value": 9,
+    "n": 7,
+    "ratio": 0.778,
+    "num_avoiding": 13842,
+    "er_min": 0,
+    "er_max": 1,
+    "er_mean": 0.36,
+    "er_zero_count": 8820,
+    "er_zero_pct": 63.7
+  },
+  "R(3,4)_n8": {
+    "r": 3,
+    "s": 4,
+    "R_value": 9,
+    "n": 8,
+    "ratio": 0.889,
+    "num_avoiding": 28,
+    "er_min": 1,
+    "er_max": 2,
+    "er_mean": 1.36,
+    "er_zero_count": 0,
+    "er_zero_pct": 0.0
+  }
+}
