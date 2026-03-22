@@ -2,12 +2,19 @@
 
 Computational investigation of Ramsey numbers using graph theory, spectral analysis, and simulated annealing. Built on the TLS-Graph extension of the Tensor Language Specification.
 
+## Research Status
+
+- **Exact results:** R(5,5) avoiders verified at n=37-42; extension impossibility confirmed for all 656 known R(5,5,42)-graphs
+- **Empirical findings:** Extension phase transition observed across R(3,3), R(3,4), R(3,5), R(4,4), R(5,5); correlation/regression analysis of structural predictors (Phases 1-2)
+- **Heuristic findings (SA-based):** ER values for R(5,5,42)-graphs are SA-derived upper bounds (1 restart, 5000 steps), not exhaustive; Phase 3 cross-Ramsey ER uses SA-constructed graph samples at larger n
+- **Open conjectures:** ER as a graph invariant (definition proposed, not yet validated against prior literature); extension phase transition mechanism; ER uniformity at closure
+
 ## Key Results
 
 - **R(5,5) avoiders verified** through n=42 (complete chain n=37-42)
-- **Extension Resistance (ER)** formalized as a novel graph invariant
+- **Extension Resistance (ER)** proposed as a candidate graph invariant
 - **Extension phase transition** confirmed across R(3,3), R(3,4), R(3,5), R(4,4), R(5,5)
-- **Graph 41** in McKay's dataset achieves ER=2 at n=42 (nearest miss to disproving R(5,5)=43)
+- **Graph 41** in McKay's dataset achieves ER=2 at n=42 (best observed extension score among known R(5,5,42)-graphs)
 - 8 spectral/structural findings documented
 
 ## Structure

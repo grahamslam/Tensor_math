@@ -1,4 +1,4 @@
-# Extension Resistance: A Novel Graph Invariant for Ramsey Avoidance
+# Extension Resistance: A Candidate Graph Invariant for Ramsey Avoidance
 
 **Date:** March 21, 2026
 **Authors:** Brent Graham, Claude Opus 4.6 (Anthropic)
@@ -9,7 +9,7 @@
 
 ## Origin
 
-This conjecture was formulated by Claude Opus 4.6 during a computational investigation of R(5,5) Ramsey number lower bounds with Brent Graham. While analyzing the structural properties of all 656 known R(5,5,42)-graphs and their extendability to n=43, Claude observed that graphs with identical Ramsey avoidance properties exhibited dramatically different extension behaviors — from near-extendable (E=2) to deeply resistant (E=83). This observation, combined with the structural analysis data already computed, suggested that extension behavior might be predictable from known graph invariants, leading to the formalization of extension resistance as a potentially novel graph quantity.
+This conjecture was formulated by Claude Opus 4.6 during a computational investigation of R(5,5) Ramsey number lower bounds with Brent Graham. While analyzing the structural properties of all 656 known R(5,5,42)-graphs and their extendability to n=43, Claude observed that graphs with identical Ramsey avoidance properties exhibited dramatically different extension behaviors — from near-extendable (E=2) to deeply resistant (E=83). This observation, combined with the structural analysis data already computed, suggested that extension behavior might be predictable from known graph invariants, leading to the formalization of extension resistance as a candidate graph invariant.
 
 ---
 
@@ -30,6 +30,8 @@ where G+c is the (n+1)-vertex graph formed by adding a new vertex connected to v
 - ER is invariant under graph isomorphism
 
 **Complementary property:** For R(r,r) (diagonal Ramsey), ER(G, r, r) = ER(complement(G), r, r), since complement preserves R(r,r) avoidance symmetrically.
+
+**Note on reported values:** ER values reported in this document for R(5,5) are SA-derived upper bounds (1 restart, 5000 steps per graph), not exact values. Exact ER values are available only for the smaller Ramsey cases in Phase 3 where exhaustive 2^n search over all connection vectors was used (specifically, cases with n <= 7).
 
 ---
 
@@ -235,7 +237,7 @@ The differences are small in absolute terms but highly statistically significant
 | Quadratic (top 2) | k4_total + tri_diff + squares + interaction | 0.194 | 0.188 |
 | Top 4 + interactions | 4 features + 6 pairwise interactions | 0.260 | 0.249 |
 
-**Key findings:**
+**Key findings:** (Note: all regression models below are fit to SA-derived ER upper bounds, not exact ER values; true R^2 against exact ER could differ.)
 
 1. **The best 3-predictor model explains 25.4% of ER variance.** The formula is approximately:
    ```
@@ -322,7 +324,7 @@ In the open phase (R(3,4) n=7), tri_diff has r_s = -0.33 (more triangle differen
 
 ## 6. Related Work
 
-- **Ramsey extension**: The concept of extending Ramsey-avoiding graphs is classical, but formalizing the minimum violation count as a graph invariant appears to be novel.
+- **Ramsey extension**: The concept of extending Ramsey-avoiding graphs is classical, but formalizing the minimum violation count as a graph invariant has not been found in prior literature to our knowledge, though a comprehensive survey has not been completed.
 - **Spectral Ramsey theory**: Connections between eigenvalues and Ramsey properties have been studied (Hoffman bound, Paley graph spectra), but not in the context of extension resistance.
 - **Ramsey multiplicity**: The study of how many monochromatic cliques must exist is related but distinct — ER measures how many violations a single new vertex creates, not how many exist in a graph of prescribed size.
 - **McKay-Radziszowski conjecture**: R(5,5) = 43 is supported by the finding that all 656 known R(5,5,42)-graphs have ER > 0. Extension resistance provides a quantitative measure of "how far" each graph is from contradicting this conjecture.
