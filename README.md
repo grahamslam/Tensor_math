@@ -158,8 +158,10 @@ riemann(m(1,0;0,0.75), t3(0,0;0,0.866|0,0;0,0), t3(0,0;0,-1|0,0;0,0|0,0;0,0|0,0;
 For large-scale Ramsey research beyond browser limits:
 
 ```bash
-python engine.py                # run Paley survey + extension landscapes
-python ramsey_research.py       # full research suite (R(3,3) through R(5,5))
+python engine.py                                    # Paley survey + extension landscapes
+python research/ramsey/scripts/ramsey_research.py    # extension window analysis
+python research/ramsey/scripts/ramsey_circulant.py   # circulant-seeded R(5,5) search
+python research/ramsey/scripts/ramsey_targeted.py    # targeted SA for R(5,5) frontier
 ```
 
 The Python engine provides the same TLS-Graph operations backed by NumPy, with ~100x speedup over the browser calculator. Handles n=50+ graphs and 5-clique counting in sub-second time.
@@ -192,18 +194,36 @@ See `docs/spectral_ramsey_findings.md` for documented research results, includin
 5. **Paley extension trap** — no Paley graph can be extended while maintaining avoidance
 6. **Extension phase transition** — window closes at ~78% of R(r,s), a structural property
 7. **The extension funnel** — transition zone where extendable and non-extendable graphs coexist
+8. **R(5,5) extension landscape** — window stays open dramatically longer for larger Ramsey numbers
+9. **R(5,5) avoiders verified through n=41** — Paley-seeded graphs verified with adjacency matrices stored
+
+See also `research/ramsey/docs/` for detailed methodology, the extension resistance conjecture, and R(5,5) search reports.
 
 ## Project structure
 
 ```
 index.html                              Browser calculator (HTML/CSS/JS)
 engine.py                               Python research engine (NumPy)
-ramsey_research.py                      R(5,5) frontier research
+er_small_ramsey.json                    Extension resistance data (Phase 3)
 docs/
   tensor_language_formal_spec.md        TLS v0.1 draft
   tensor_language_formal_spec_v0.2.md   TLS v0.2 (current, includes TLS-Graph)
   TLS_paper_draft.md                    Academic paper draft
   spectral_ramsey_findings.md           Research findings & data
+research/ramsey/
+  scripts/                              19 analysis & search scripts
+    ramsey_research.py                  Extension window analysis
+    ramsey_circulant.py                 Circulant-seeded R(5,5) search
+    ramsey_targeted.py                  Targeted SA for R(5,5) frontier
+    analyze_er_*.py                     Extension resistance analysis
+    verify_*.py                         Graph verification tools
+    break_trap*.py                      Paley trap breaking experiments
+  docs/                                 Research documents
+    extension_resistance_conjecture.md  ER conjecture formalization
+    METHODOLOGY.md                      Research methodology
+    R55_search_report.md                R(5,5) search progress
+  results/                              Verified adjacency matrices (.npy, .json)
+  dashboard/                            Live SA monitoring (Chart.js)
 ```
 
 ## TLS compliance
